@@ -903,7 +903,8 @@ Prefer a Python monorepo with small internal packages.
 brain/
 ├── apps/
 │   ├── api/
-│   └── mcp/
+│   ├── mcp/
+│   └── web/                 # target-state Next.js console
 │
 ├── packages/
 │   ├── core/
@@ -917,8 +918,10 @@ brain/
 │
 ├── examples/
 │   └── northstar/
+│       ├── assets/
 │       ├── documents/
-│       └── skills/
+│       ├── skills/
+│       └── seed/
 │
 ├── tests/
 │   ├── unit/
@@ -1190,6 +1193,25 @@ MCP and HTTP are two interfaces over the same Brain.
 
 ---
 
+# Web console
+
+Brain should eventually include a Next.js application under `apps/web` for humans to
+inspect and manage the same governed content exposed through HTTP and MCP.
+
+The initial console should consume Brain's public HTTP API and support:
+
+* Source and Page browsing
+* folder-tree navigation
+* rendered Page Markdown
+* rendered Skill Markdown and parsed YAML frontmatter
+* visibility into the tools exposed through MCP
+
+Later iterations may add governed editing, version history, access-policy administration,
+and search diagnostics. Authorization remains enforced by the backend; the web console
+must not become a separate implementation of Brain's domain rules.
+
+---
+
 # Example company
 
 The repository should include a realistic fictional organisation for development, demonstrations and end-to-end testing.
@@ -1202,10 +1224,15 @@ For example:
 
 ```text
 examples/northstar/
+├── assets/
+│   ├── logo.png
+│   └── brand/
+│       └── README.md
 ├── documents/
 │   ├── company/
 │   │   ├── employee-handbook.pdf
-│   │   └── company-policies.pdf
+│   │   ├── company-policies.pdf
+│   │   └── team-and-roles.pdf
 │   ├── finance/
 │   │   ├── expenses-policy.pdf
 │   │   └── purchasing-policy.pdf
@@ -1219,11 +1246,27 @@ examples/northstar/
 │       ├── sales-playbook.pdf
 │       └── pricing-guide.pdf
 │
-└── skills/
-    ├── ingest.md
-    ├── extract_markdown.md
-    └── answer_policy_question.md
+├── skills/
+│   ├── ingest.md
+│   ├── search.md
+│   ├── retrieve.md
+│   ├── update.md
+│   ├── index.md
+│   ├── brand.md
+│   └── voice.md
+│
+└── seed/
+    └── manifest.yaml
 ```
+
+Northstar should be a credible but entirely fictional private-equity firm. Its seed corpus
+should cover the company, investment approach, portfolio operations, team, and positions.
+Team structure should initially be represented as knowledge rather than introducing a
+special-purpose HR schema.
+
+Brand and voice Skills may reference the fictional logo, palette, and example document
+layouts. Brain should preserve those assets as governed Sources and later expose them to
+MCP clients through a documented resource or URL contract.
 
 The corpus should eventually contain overlapping, evolving and occasionally conflicting information.
 
