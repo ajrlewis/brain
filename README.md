@@ -89,6 +89,10 @@ Brain does not need to fetch these resources itself.
 
 An external agent or process retrieves information and submits structured knowledge to Brain.
 
+For the initial integration, Cortex supplies already-extracted Markdown with Source and
+provenance metadata. Brain does not accept, fetch, or parse the original document through
+MCP; the Markdown becomes immutable PageVersion content.
+
 For example:
 
 ```text

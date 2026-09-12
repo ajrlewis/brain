@@ -7,6 +7,11 @@ access-control, Alembic, and Compose foundation. Persist deterministic Northstar
 knowledge and expose the same create/read behavior through HTTP and MCP application
 services.
 
+Cortex owns source retrieval and document extraction. It supplies Brain with already
+extracted Markdown plus Source and provenance metadata; Brain validates, governs,
+versions, stores, and serves that structured input. Brain does not receive or parse the
+original document through MCP.
+
 Preserve the implemented boundary:
 
 ```text
@@ -40,6 +45,9 @@ accept `AuthContext`, invoke `brain_auth.require_access`, and own all versioning
 same-tenant, provenance, and authorization rules. Repositories participate in a
 caller-owned session/unit of work.
 
+Create operations accept extracted Markdown and structured provenance metadata from
+Cortex. They do not accept document uploads, fetch remote content, or extract text.
+
 Page access controls its title, content, and versions. Source access independently
 controls direct retrieval. Provenance output is the intersection of Page and Source
 access and must not reveal hidden Source identifiers or counts.
@@ -59,8 +67,8 @@ versions, and provenance. Represent people, teams, and positions as ordinary Pag
 overlapping or superseded facts to demonstrate provenance and versioning. It must be safe
 to rerun without duplicating records.
 
-Use synthetic text fixtures only. Binary PDFs and brand assets may be added as fixtures,
-but binary delivery remains deferred.
+Use synthetic extracted Markdown and provenance metadata only. Do not add PDF/document
+uploads, binary fixtures, parsing, or delivery.
 
 ## Definition of Done
 
@@ -80,7 +88,8 @@ but binary delivery remains deferred.
 
 - Skill and SkillVersion persistence;
 - chunks, full-text/vector search, embeddings, and external AI providers;
-- document parsing or agent-driven ingestion;
+- source retrieval, document parsing, and ingestion orchestration, which belong to Cortex
+  rather than Brain;
 - binary asset delivery over MCP;
 - production identity-provider integration;
 - the Next.js web console, deployment, and production configuration.
