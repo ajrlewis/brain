@@ -52,6 +52,11 @@ health, one-shot migration completion, then API startup.
 - Folders provide typed hierarchy; tags provide classification and never authorization.
 - Top-level domain data is organization-scoped.
 
+The initial operational model is one Brain/Cortex stack with one active customer
+Organization per tenant. Organization scoping remains a database and authorization
+invariant for defense in depth and synthetic tests; shared-SaaS tenant discovery,
+provisioning, and cross-tenant administration are not current product requirements.
+
 ## Security And Retrieval Invariants
 
 Authorization must constrain retrieval candidates before ranking or result limiting. Unauthorized titles, snippets, semantic matches, chunks, provenance, and other metadata must never be returned. HTTP and MCP enforce identical authorization and domain rules.
@@ -61,6 +66,12 @@ Use a provider-neutral `AuthContext` containing organization, principal, and gro
 ## Runtime And External Boundaries
 
 The implemented stack is Python 3.13+, uv, FastAPI, FastMCP, Pydantic v2, SQLAlchemy 2.x, Alembic, psycopg, pgvector, PostgreSQL 17 with pgvector, pytest, Ruff, Pyright, Docker, and GitHub Actions.
+
+Database access currently uses synchronous SQLAlchemy sessions and psycopg. FastAPI's
+synchronous handlers run in worker threads; synchronous FastMCP tools can occupy their
+request execution while database work completes. Any future async migration must cover
+the shared service/session boundary consistently rather than creating divergent HTTP and
+MCP persistence paths.
 
 The service should remain containerizable and host-independent even though production is intended for Vercel with managed PostgreSQL. Repository code and migrations are canonical; hosted systems are authoritative only for live deployment and database state. Deployment, production data access or mutation, hosted configuration changes, and secret changes require explicit maintainer authorization.
 
