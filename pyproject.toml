@@ -1,0 +1,66 @@
+[project]
+name = "brain-workspace"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "httpx>=0.28,<1",
+  "pyright>=1.1.405,<2",
+  "pytest>=8.4,<9",
+  "pytest-asyncio>=1.2,<2",
+  "pytest-cov>=7,<8",
+  "ruff>=0.13,<1",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["apps/*", "packages/*"]
+
+[tool.uv.sources]
+brain-ai = { workspace = true }
+brain-api = { workspace = true }
+brain-auth = { workspace = true }
+brain-core = { workspace = true }
+brain-db = { workspace = true }
+brain-mcp = { workspace = true }
+brain-schemas = { workspace = true }
+brain-search = { workspace = true }
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["apps/*/src", "packages/*/src", "tests"]
+extend-exclude = ["README.md", ".agents"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.pyright]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+include = ["apps", "packages", "tests"]
+exclude = ["**/__pycache__"]
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers --strict-config"
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+  "integration: requires local infrastructure",
+  "e2e: exercises a runnable application boundary",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["brain_api", "brain_core", "brain_mcp", "brain_schemas"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true

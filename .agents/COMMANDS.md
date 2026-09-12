@@ -1,24 +1,75 @@
 # Commands
 
-## Current State
+## Prerequisites
 
-No project commands are established yet. The repository has no application code, `pyproject.toml`, `uv.lock`, Docker configuration, test configuration, or CI workflow. Do not present the example commands in `README.md` as runnable until implementation adds and verifies them.
+The workspace selects Python from `.python-version` and requires Python 3.13+. uv 0.10.6,
+Python 3.13.15, Docker 20.10.8, and Docker Compose 2.0.0 were used on 2026-09-12.
+The explicit cache path below is required in restricted coding-agent environments and is
+safe to use elsewhere.
 
-## Verified Host Tools
+## Workspace
 
-Verified during coding-agent bootstrap on 2026-09-12:
+Verified on 2026-09-12:
 
-```text
-git 2.50.1
-gh 2.97.0
-Python 3.12.0
-uv 0.10.6
-Docker 20.10.8
-Docker Compose 2.0.0
+```bash
+UV_CACHE_DIR="$PWD/.uv-cache" uv lock
+UV_CACHE_DIR="$PWD/.uv-cache" uv sync --frozen --all-packages
 ```
 
-The target application requires Python 3.13 or newer, so the currently selected `python3` does not satisfy the declared runtime requirement.
+## Applications
 
-## Baseline To Establish With Implementation
+Verified on 2026-09-12. The API health response was queried at
+`http://127.0.0.1:8000/health`; the MCP command reached its stdio serving loop.
 
-When application scaffolding is separately authorized, add and verify ecosystem-native commands for dependency sync, local PostgreSQL, migrations, API and MCP development, Ruff lint and format checks, Pyright, focused/unit/integration/end-to-end tests, coverage, full verification, and Docker builds. Record only commands that have actually run successfully, including prerequisites and any required environment.
+```bash
+UV_CACHE_DIR="$PWD/.uv-cache" uv run brain-api
+UV_CACHE_DIR="$PWD/.uv-cache" uv run brain-mcp
+```
+
+## Quality
+
+Verified on 2026-09-12:
+
+```bash
+UV_CACHE_DIR="$PWD/.uv-cache" uv run ruff check .
+UV_CACHE_DIR="$PWD/.uv-cache" uv run ruff format --check .
+UV_CACHE_DIR="$PWD/.uv-cache" uv run pyright
+UV_CACHE_DIR="$PWD/.uv-cache" uv run pytest -m 'not integration' --cov --cov-report=term-missing
+```
+
+The last command ran five tests with 94.87% branch-aware coverage. The dependency-backed
+integration suite is intentionally separate:
+
+```bash
+TEST_DATABASE_URL=postgresql://brain:brain@localhost:5432/brain \
+  UV_CACHE_DIR="$PWD/.uv-cache" uv run pytest -m integration
+```
+
+## PostgreSQL And Docker
+
+The Compose model and application image build were verified on 2026-09-12:
+
+```bash
+docker compose config
+docker build -t brain:foundation .
+```
+
+Canonical local database lifecycle:
+
+```bash
+docker compose up -d postgres
+docker compose exec -T postgres pg_isready -U brain -d brain
+docker compose exec -T postgres psql -U brain -d brain -c \
+  "SELECT extversion FROM pg_extension WHERE extname = 'vector';"
+docker compose down
+```
+
+To erase local Brain database data, use `docker compose down -v`. This permanently removes
+the disposable Compose volume.
+
+The database lifecycle and integration test could not be verified on the 2026-09-12 host:
+Docker Desktop 20.10.8 reproducibly failed during `initdb` with `Cannot allocate memory`,
+despite the pgvector image itself executing successfully. CI is configured to perform the
+extension creation and integration test on Linux. There is no migration command yet because
+no application schema exists in this health-only milestone; Alembic begins with the first
+schema change.

@@ -2,6 +2,14 @@
 
 Brain is a self-hosted knowledge and capability store for AI agents.
 
+## Implementation status
+
+The repository currently implements the first foundation milestone: a Python 3.13 uv
+workspace, typed environment settings, a shared health application service, thin FastAPI
+and FastMCP health entrypoints, local PostgreSQL with pgvector configuration, and the
+quality/CI baseline. The knowledge, Skill, search, authentication, and complete database
+models described below remain target state and are intentionally not implemented yet.
+
 It provides a persistent, structured place for an organisation to store:
 
 * what it knows

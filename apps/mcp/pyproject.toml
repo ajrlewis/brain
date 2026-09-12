@@ -1,0 +1,22 @@
+[project]
+name = "brain-mcp"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+  "brain-core",
+  "brain-schemas",
+  # 47+ no longer publishes x86_64 macOS wheels; keep local Intel development working.
+  "cryptography>=46,<47",
+  "fastmcp>=2.12,<3",
+]
+
+[project.scripts]
+brain-mcp = "brain_mcp.server:run"
+
+[tool.uv.sources]
+brain-core = { workspace = true }
+brain-schemas = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
