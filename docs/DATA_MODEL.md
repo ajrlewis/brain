@@ -88,6 +88,9 @@ enums. Metadata may describe a provider without introducing provider-specific ta
 Sources are soft-deleted. Historical PageVersionSource links are retained; normal reads
 exclude deleted Sources, including from provenance.
 
+A Source records identity and provenance metadata; it does not store the original binary
+document or its extracted body. Cortex supplies extracted Markdown as PageVersion content.
+
 ### Page
 
 Page fields are `id`, `organization_id`, nullable `folder_id`, `slug`, `title`, nullable
@@ -100,6 +103,10 @@ work, but public retrieval requires one.
 The current-version foreign key must point to a PageVersion owned by that same Page. Page
 is a stable identity and contains no Markdown or content hash. Pages are soft-deleted;
 versions and provenance are retained.
+
+Page authorization is relational metadata on `Page`, never trusted from YAML frontmatter
+inside supplied Markdown. A summary is not a separate canonical field in the initial
+model; future derived summaries or snippets inherit the Page policy.
 
 ### PageVersion
 
