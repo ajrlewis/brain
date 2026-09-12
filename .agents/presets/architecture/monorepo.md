@@ -1,6 +1,6 @@
 # Monorepo Preset
 
-Adopted for Brain's intended Python monorepo. Create `apps/api`, `apps/mcp`, and the responsibility-based `packages/` boundaries only when application scaffolding is separately requested; they are target state, not current structure.
+Adopted for Brain's Python monorepo. The health-only foundation implements `apps/api`, `apps/mcp`, and the responsibility-based `packages/` boundaries below; their fuller product behavior remains target state.
 
 ```text
 apps/

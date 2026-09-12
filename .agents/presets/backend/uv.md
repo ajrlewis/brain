@@ -1,6 +1,6 @@
 # uv Preset
 
-Adopted for Brain's intended Python workspace and single root lockfile. Do not create the workspace or record example invocations as verified until application scaffolding is requested.
+Adopted for Brain's Python workspace and single root lockfile. Record commands as verified only after running them successfully.
 
 - Use `uv` when the repository has adopted `pyproject.toml` plus `uv.lock` or maintainer direction.
 - Prefer `uv sync` for environment setup.
