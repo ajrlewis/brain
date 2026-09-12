@@ -6,8 +6,6 @@ from sqlalchemy import Engine
 from sqlalchemy import create_engine as sqlalchemy_create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from brain_core import Settings
-
 
 class SessionFactory(Protocol):
     """Injectable boundary used by repositories and application services."""
@@ -15,7 +13,12 @@ class SessionFactory(Protocol):
     def __call__(self) -> Session: ...
 
 
-def create_engine(settings: Settings) -> Engine:
+class DatabaseSettings(Protocol):
+    @property
+    def database_url(self) -> object: ...
+
+
+def create_engine(settings: DatabaseSettings) -> Engine:
     return sqlalchemy_create_engine(str(settings.database_url), pool_pre_ping=True)
 
 

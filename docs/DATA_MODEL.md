@@ -1,8 +1,8 @@
 # Data Model
 
 This document is the contract for Brain's initial identity, access, knowledge, and Skill
-model. The first migration implements the **foundation** tables identified below; the
-knowledge and Skill tables are specified for subsequent vertical slices.
+model. The migrations implement the identity/access and knowledge tables identified
+below; Skill tables are specified for a subsequent vertical slice.
 
 PostgreSQL UUID primary keys are stable public identifiers. Timestamps are timezone-aware.
 Tenant-owned uniqueness and foreign keys include `organization_id` so records from two
@@ -60,7 +60,7 @@ it grants access to members of at least one linked Group. A policy is reusable; 
 not own the records that reference it, and its physical deletion is restricted while in
 use.
 
-## Navigation (specified, not yet migrated)
+## Navigation (Page folders implemented)
 
 ### Folder
 
@@ -70,11 +70,12 @@ Folder fields are `id`, `organization_id`, nullable `parent_id`, `kind` (`page` 
 `deleted_at`. Sibling `(parent_id, kind, slug)` values are unique within an Organization.
 A child must have the same Organization and kind as its parent; cycles are forbidden.
 Page folders contain Pages and Skill folders contain Skills. Root folders have no parent.
+This first knowledge slice permits only `page` folders; `skill` folders remain deferred.
 
 Folders are soft-deleted. Deletion is rejected while live children or live items remain.
 Position is navigation order only and has no retrieval meaning.
 
-## Knowledge (specified, not yet migrated)
+## Knowledge (implemented)
 
 ### Source
 

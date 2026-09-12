@@ -138,6 +138,7 @@ version = "0.1.0"
 source = { editable = "packages/core" }
 dependencies = [
     { name = "brain-auth" },
+    { name = "brain-db" },
     { name = "brain-schemas" },
     { name = "pydantic-settings" },
 ]
@@ -145,6 +146,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "brain-auth", editable = "packages/auth" },
+    { name = "brain-db", editable = "packages/db" },
     { name = "brain-schemas", editable = "packages/schemas" },
     { name = "pydantic-settings", specifier = ">=2.10,<3" },
 ]
@@ -155,7 +157,6 @@ version = "0.1.0"
 source = { editable = "packages/db" }
 dependencies = [
     { name = "alembic" },
-    { name = "brain-core" },
     { name = "pgvector" },
     { name = "psycopg", extra = ["binary"] },
     { name = "sqlalchemy" },
@@ -164,7 +165,6 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.16,<2" },
-    { name = "brain-core", editable = "packages/core" },
     { name = "pgvector", specifier = ">=0.4,<1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
     { name = "sqlalchemy", specifier = ">=2.0,<3" },

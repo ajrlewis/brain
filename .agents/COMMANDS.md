@@ -27,6 +27,13 @@ UV_CACHE_DIR="$PWD/.uv-cache" uv run brain-api
 UV_CACHE_DIR="$PWD/.uv-cache" uv run brain-mcp
 ```
 
+After migrating a local database, the deterministic synthetic knowledge seed is:
+
+```bash
+DATABASE_URL=postgresql+psycopg://brain:brain@localhost:5432/brain \
+  UV_CACHE_DIR="$PWD/.uv-cache" uv run brain-seed-northstar
+```
+
 ## Quality
 
 Verified on 2026-09-12:
@@ -38,7 +45,7 @@ UV_CACHE_DIR="$PWD/.uv-cache" uv run pyright
 UV_CACHE_DIR="$PWD/.uv-cache" uv run pytest -m 'not integration' --cov --cov-report=term-missing
 ```
 
-The last command ran 24 tests with 97%+ branch-aware coverage. The dependency-backed
+The last command ran 29 tests with 93%+ branch-aware coverage. The dependency-backed
 integration suite is intentionally separate:
 
 ```bash
@@ -52,7 +59,7 @@ The Compose model and application image build were verified on 2026-09-12:
 
 ```bash
 docker compose config
-docker build -t brain:foundation .
+docker build -t brain:knowledge .
 ```
 
 Run the combined FastAPI and FastMCP HTTP application with PostgreSQL:
