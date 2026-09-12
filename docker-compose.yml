@@ -20,11 +20,12 @@ services:
     build: .
     environment:
       DATABASE_URL: postgresql+psycopg://brain:brain@postgres:5432/brain
+      LOCAL_BEARER_TOKEN: ${LOCAL_BEARER_TOKEN:-brain-local-dev}
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test:
         [
@@ -36,6 +37,16 @@ services:
       interval: 2s
       timeout: 5s
       retries: 15
+
+  migrate:
+    build: .
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://brain:brain@postgres:5432/brain
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
 volumes:
   brain-postgres-data:

@@ -2,7 +2,16 @@
 name = "brain-db"
 version = "0.1.0"
 requires-python = ">=3.13"
-dependencies = ["psycopg[binary]>=3.2,<4", "sqlalchemy>=2.0,<3", "pgvector>=0.4,<1"]
+dependencies = [
+  "alembic>=1.16,<2",
+  "brain-core",
+  "psycopg[binary]>=3.2,<4",
+  "sqlalchemy>=2.0,<3",
+  "pgvector>=0.4,<1",
+]
+
+[tool.uv.sources]
+brain-core = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
