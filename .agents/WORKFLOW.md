@@ -1,6 +1,6 @@
 # Workflow
 
-`README.md` is Brain's target-state product specification. The repository currently contains no application implementation, so do not describe planned components as existing or proposed commands as verified. Application scaffolding requires a separate request.
+`README.md` is Brain's target-state product specification. The repository currently implements the health-only foundation described in `.agents/ARCHITECTURE.md`; do not describe later target-state components as implemented or proposed commands as verified.
 
 ## Change Loop
 
@@ -16,11 +16,14 @@
 The repository uses GitHub Flow with `main` as the remote default branch.
 
 - Work on a focused feature or fix branch; never push directly to `main`.
+- Use a concise typed branch name such as `feature/add-export`, `fix/empty-response`, or `chore/update-dependencies`; include a tracker identifier when one exists.
 - Before pushing or updating a pull request, fetch `origin` and merge `origin/main` into the feature branch. Resolve conflicts on the feature branch and rerun relevant checks.
 - Open a pull request into `main`, inspect CI and review feedback, and merge through the pull request.
 - Do not force-push shared branches.
 
-The remote is currently a solo repository with no commits, so `main` and effective branch protection do not yet exist. Follow the corresponding open item in `.agents/todos/TODO.md` after the initial branch is published.
+The phrases "branch add commit push and PR" and "PR merged," or clear equivalents, invoke the complete delivery and safe local-cleanup procedures in `.agents/presets/git/github-flow.md`. Do not pause between authorized delivery steps merely to request confirmation already supplied by the shortcut.
+
+The remote is a solo repository with no current protection on `main`. Follow the corresponding open item in `.agents/todos/TODO.md`; remote repository-setting changes require explicit maintainer authorization.
 
 ## Project-Specific Expectations
 

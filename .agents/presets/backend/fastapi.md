@@ -1,6 +1,6 @@
 # FastAPI Preset
 
-Adopted for Brain's intended HTTP interface. FastAPI routes must delegate to the same domain/application services used by MCP and must not own versioning, authorization, or search rules.
+Adopted for Brain's HTTP interface. FastAPI routes must delegate to the same domain/application services used by MCP and must not own versioning, authorization, or search rules.
 
 - Keep request and response schemas explicit. Prefer the project's established Pydantic conventions; when no alternative exists, Pydantic is the native default for FastAPI boundary models.
 - Put validation at API boundaries and business rules in service/domain code.
