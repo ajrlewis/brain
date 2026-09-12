@@ -6,7 +6,8 @@ Brain is a self-hosted knowledge and capability store for AI agents.
 
 The repository currently implements the first foundation milestone: a Python 3.13 uv
 workspace, typed environment settings, a shared health application service, thin FastAPI
-and FastMCP health entrypoints, local PostgreSQL with pgvector configuration, and the
+and FastMCP health interfaces served by one HTTP application (with a separate MCP stdio
+entrypoint), local PostgreSQL with pgvector configuration, and the
 quality/CI baseline. The knowledge, Skill, search, authentication, and complete database
 models described below remain target state and are intentionally not implemented yet.
 
@@ -1251,6 +1252,13 @@ uv sync
 docker compose up -d postgres
 uv run alembic upgrade head
 uv run brain-api
+```
+
+The implemented health-only foundation can also run PostgreSQL and the combined HTTP API
+through Compose. Its MCP Streamable HTTP endpoint is mounted at `/mcp/`:
+
+```bash
+docker compose up -d --build
 ```
 
 PostgreSQL should run locally through Docker Compose with pgvector enabled.

@@ -94,6 +94,7 @@ version = "0.1.0"
 source = { editable = "apps/api" }
 dependencies = [
     { name = "brain-core" },
+    { name = "brain-mcp" },
     { name = "brain-schemas" },
     { name = "fastapi" },
     { name = "uvicorn", extra = ["standard"] },
@@ -102,6 +103,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "brain-core", editable = "packages/core" },
+    { name = "brain-mcp", editable = "apps/mcp" },
     { name = "brain-schemas", editable = "packages/schemas" },
     { name = "fastapi", specifier = ">=0.116,<1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.35,<1" },
