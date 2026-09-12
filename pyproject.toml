@@ -58,7 +58,7 @@ markers = [
 
 [tool.coverage.run]
 branch = true
-source = ["brain_api", "brain_core", "brain_mcp", "brain_schemas"]
+source = ["brain_api", "brain_auth", "brain_core", "brain_db", "brain_mcp", "brain_schemas"]
 
 [tool.coverage.report]
 fail_under = 90

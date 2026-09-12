@@ -4,12 +4,12 @@ Brain is a self-hosted knowledge and capability store for AI agents.
 
 ## Implementation status
 
-The repository currently implements the first foundation milestone: a Python 3.13 uv
-workspace, typed environment settings, a shared health application service, thin FastAPI
-and FastMCP health interfaces served by one HTTP application (with a separate MCP stdio
-entrypoint), local PostgreSQL with pgvector configuration, and the
-quality/CI baseline. The knowledge, Skill, search, authentication, and complete database
-models described below remain target state and are intentionally not implemented yet.
+The repository implements its persistent identity and access-control foundation: a Python
+3.13 uv workspace, typed settings, SQLAlchemy models and session boundaries, a real
+Alembic migration, PostgreSQL with pgvector, and a one-shot Compose migration lifecycle.
+FastAPI and FastMCP expose health plus an equivalent authenticated context operation over
+shared services. Knowledge, Skill, search, production identity integration, and their
+database models described below remain target state.
 
 It provides a persistent, structured place for an organisation to store:
 
@@ -1288,23 +1288,44 @@ The example organisation must contain no real confidential company information.
 
 # Local development
 
-A developer should eventually be able to clone Brain and run something close to:
+A developer can install the workspace and run each lifecycle step explicitly:
 
 ```bash
-uv sync
+UV_CACHE_DIR="$PWD/.uv-cache" uv sync --frozen --all-packages
 docker compose up -d postgres
-uv run alembic upgrade head
-uv run brain-api
+docker compose up migrate
+docker compose up -d api
 ```
 
-The implemented health-only foundation can also run PostgreSQL and the combined HTTP API
-through Compose. Its MCP Streamable HTTP endpoint is mounted at `/mcp/`:
+Or build and start the complete dependency chain in one command:
 
 ```bash
 docker compose up -d --build
 ```
 
-PostgreSQL should run locally through Docker Compose with pgvector enabled.
+Compose waits for PostgreSQL health, requires the one-shot migration service to finish
+successfully, and only then starts the API. The API never applies migrations itself.
+FastAPI serves `/health` and `/auth/context`; MCP Streamable HTTP is mounted at `/mcp/`
+with `health` and `auth_context` tools. Set `LOCAL_BEARER_TOKEN` (the disposable Compose
+default is `brain-local-dev`) and send it as `Authorization: Bearer <token>` to the
+authenticated operations. Health remains unauthenticated.
+
+Run the PostgreSQL integration tests against the Compose database (use the same selected
+host port):
+
+```bash
+TEST_DATABASE_URL=postgresql://brain:brain@localhost:5432/brain \
+  UV_CACHE_DIR="$PWD/.uv-cache" uv run pytest -m integration
+```
+
+To reset the disposable database, stop the stack and permanently delete its volume:
+
+```bash
+docker compose down -v
+```
+
+**Data-loss warning:** `down -v` irreversibly removes all data in the local Brain Compose
+database volume.
 
 Brain should also have a production-oriented Dockerfile.
 
@@ -1329,6 +1350,11 @@ Expected areas include:
 
 ```text
 DATABASE_URL
+
+LOCAL_BEARER_TOKEN
+LOCAL_ORGANIZATION_ID
+LOCAL_PRINCIPAL_ID
+LOCAL_GROUP_IDS
 
 AUTH_MODE
 AUTH_SECRET

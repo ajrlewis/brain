@@ -1,6 +1,6 @@
 # Workflow
 
-`README.md` is Brain's target-state product specification. The repository currently implements the health-only foundation described in `.agents/ARCHITECTURE.md`; do not describe later target-state components as implemented or proposed commands as verified.
+`README.md` is Brain's target-state product specification. The repository currently implements the persistent identity/access-control foundation described in `.agents/ARCHITECTURE.md`; do not describe later knowledge, Skill, or search components as implemented or proposed commands as verified.
 
 ## Change Loop
 

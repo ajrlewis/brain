@@ -38,7 +38,7 @@ UV_CACHE_DIR="$PWD/.uv-cache" uv run pyright
 UV_CACHE_DIR="$PWD/.uv-cache" uv run pytest -m 'not integration' --cov --cov-report=term-missing
 ```
 
-The last command ran six tests with 95.29% branch-aware coverage. The dependency-backed
+The last command ran 24 tests with 97%+ branch-aware coverage. The dependency-backed
 integration suite is intentionally separate:
 
 ```bash
@@ -68,9 +68,18 @@ Canonical local database lifecycle:
 ```bash
 docker compose up -d postgres
 docker compose exec -T postgres pg_isready -U brain -d brain
+docker compose up migrate
+docker compose up -d api
 docker compose exec -T postgres psql -U brain -d brain -c \
   "SELECT extversion FROM pg_extension WHERE extname = 'vector';"
 docker compose down
+```
+
+For a host-run migration instead of the one-shot container:
+
+```bash
+DATABASE_URL=postgresql+psycopg://brain:brain@localhost:5432/brain \
+  UV_CACHE_DIR="$PWD/.uv-cache" uv run alembic upgrade head
 ```
 
 If host port 5432 is already occupied, select another port consistently for Compose and
@@ -86,9 +95,9 @@ POSTGRES_PORT=55432 docker compose down
 To erase local Brain database data, use `docker compose down -v`. This permanently removes
 the disposable Compose volume.
 
-The database lifecycle and integration test were verified on Docker Desktop 4.90.0 using
+The database lifecycle, clean Alembic upgrade, model/migration comparison, integration
+tests, one-shot migration dependency, healthy API, and image build were verified on Docker
+Desktop 4.90.0 using
 host port 55432 because a native PostgreSQL instance occupies 5432. Docker Desktop 20.10.8
 had previously failed during `initdb` with `Cannot allocate memory`. CI also performs the
-extension creation and integration test on Linux. There is no migration command yet because
-no application schema exists in this health-only milestone; Alembic begins with the first
-schema change.
+extension creation and integration test on Linux.
