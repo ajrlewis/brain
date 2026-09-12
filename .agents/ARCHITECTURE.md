@@ -1,6 +1,6 @@
 # Architecture
 
-`README.md` is the canonical target-state specification. The implemented foundation is a Python 3.13 uv workspace with HTTP and MCP interfaces over shared application services, a provider-neutral authorization context, and PostgreSQL identity/access-control persistence managed by Alembic. Knowledge, Skill, and search behavior remains target state unless explicitly identified below.
+`README.md` is the canonical target-state specification. The implemented system is a Python 3.13 uv workspace with HTTP and MCP interfaces over shared application services, a provider-neutral authorization context, and PostgreSQL identity/access plus governed knowledge persistence managed by Alembic. Skill and search behavior remains target state unless explicitly identified below.
 
 ## Purpose And Boundary
 
@@ -15,10 +15,10 @@ MCP ──────┘                                  └─────> p
 ```
 
 - `apps/api` and `apps/mcp` are thin transport boundaries over shared services.
-- `packages/core` owns typed settings plus the shared health and identity application services.
-- `packages/schemas` owns transport-neutral health and authorization-context responses.
+- `packages/core` owns typed settings plus shared health, identity, and knowledge application services.
+- `packages/schemas` owns explicit transport-neutral public request/response contracts.
 - `packages/auth` owns immutable `AuthContext`, local bearer authentication, and the initial same-tenant/any-group policy evaluator.
-- `packages/db` owns declarative metadata, identity/access-control models, engine/session factories, caller-owned repository sessions, and Alembic. Knowledge repositories are deferred.
+- `packages/db` owns declarative metadata, identity/access and knowledge models, engine/session factories, caller-owned repositories, Alembic, and the idempotent Northstar seed.
 - `packages/ai` and `packages/search` remain installable boundaries with implementations deferred.
 
 Applications may depend on packages; packages must not depend on applications. HTTP and MCP must not independently implement domain rules.
@@ -30,9 +30,16 @@ adapters around the same local bearer authenticator and IdentityService. The sep
 `brain-mcp` command preserves stdio, though bearer authentication is available over HTTP.
 Neither health check performs authentication or database work.
 
+Authenticated HTTP routes and matching MCP tools create/read Page folders and Sources,
+create Pages with extracted Markdown, append immutable PageVersions, and read Pages with
+only the provenance Sources visible to the caller. Both transports invoke the same
+`KnowledgeService`; Cortex remains responsible for retrieval and extraction.
+
 The initial migration creates Organization, Principal, Group, GroupMembership,
 AccessPolicy, and AccessPolicyGroup. Composite tenant foreign keys prevent cross-tenant
-links. The application process never migrates implicitly: Compose orders PostgreSQL
+links. The second migration adds Page folders, Sources, Pages, immutable PageVersions,
+and retained PageVersionSource provenance with same-tenant/current-version constraints.
+The application process never migrates implicitly: Compose orders PostgreSQL
 health, one-shot migration completion, then API startup.
 
 ## Durable Data Rules

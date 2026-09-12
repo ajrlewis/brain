@@ -4,12 +4,12 @@ Brain is a self-hosted knowledge and capability store for AI agents.
 
 ## Implementation status
 
-The repository implements its persistent identity and access-control foundation: a Python
-3.13 uv workspace, typed settings, SQLAlchemy models and session boundaries, a real
-Alembic migration, PostgreSQL with pgvector, and a one-shot Compose migration lifecycle.
-FastAPI and FastMCP expose health plus an equivalent authenticated context operation over
-shared services. Knowledge, Skill, search, production identity integration, and their
-database models described below remain target state.
+The repository implements its persistent identity/access and first governed knowledge
+slice. PostgreSQL stores Page folders, Sources, Pages, immutable PageVersions, and
+access-filtered provenance. Shared application services expose equivalent create/read
+operations through FastAPI and FastMCP, and a deterministic Northstar seed demonstrates
+versioned synthetic knowledge. Skill persistence, search, chunks, embeddings, document
+retrieval/parsing, and production identity integration remain target state.
 
 It provides a persistent, structured place for an organisation to store:
 
@@ -1309,10 +1309,20 @@ docker compose up -d --build
 
 Compose waits for PostgreSQL health, requires the one-shot migration service to finish
 successfully, and only then starts the API. The API never applies migrations itself.
-FastAPI serves `/health` and `/auth/context`; MCP Streamable HTTP is mounted at `/mcp/`
-with `health` and `auth_context` tools. Set `LOCAL_BEARER_TOKEN` (the disposable Compose
-default is `brain-local-dev`) and send it as `Authorization: Bearer <token>` to the
-authenticated operations. Health remains unauthenticated.
+FastAPI serves `/health`, `/auth/context`, and authenticated create/read routes for
+`/folders`, `/sources`, `/pages`, and `/pages/{page_id}/versions`. MCP Streamable HTTP is
+mounted at `/mcp/` with matching tools. Set `LOCAL_BEARER_TOKEN` (the disposable Compose
+default is `brain-local-dev`) and send it as `Authorization: Bearer <token>` to
+authenticated operations. Both health interfaces remain unauthenticated and database-free.
+
+After applying migrations, seed the wholly fictional Northstar corpus explicitly. The
+command uses stable UUIDs and conflict-safe inserts, so rerunning it does not duplicate
+records:
+
+```bash
+DATABASE_URL=postgresql+psycopg://brain:brain@localhost:5432/brain \
+  UV_CACHE_DIR="$PWD/.uv-cache" uv run brain-seed-northstar
+```
 
 Run the PostgreSQL integration tests against the Compose database (use the same selected
 host port):
