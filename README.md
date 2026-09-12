@@ -632,9 +632,120 @@ Brain does not need SharePoint, email, web browsing or PDF-agent logic to implem
 
 ---
 
+# Built-in Skills and governance
+
+Brain should ship a small, repository-owned default Skill bundle independently of any
+client-specific agent files or example corpus:
+
+```text
+content/default/
+├── manifest.yaml
+└── skills/
+    ├── index.md
+    ├── ingest.md
+    ├── retrieve.md
+    ├── update.md
+    └── lint.md
+```
+
+`assets/` is reserved for files served as assets; these Markdown documents are canonical
+seed content, so `content/default/skills/` makes their lifecycle explicit. Packaging and
+Docker builds must include this directory. An explicit `brain-seed-defaults` bootstrap
+command should create deterministic Skill and SkillVersion records for the selected
+Organization, policy and steward. It must be idempotent, must not run implicitly during
+migration or application startup, and must not overwrite a locally edited current version.
+Later bundled updates should be proposed as reviewed new versions rather than silently
+replacing deployment state.
+
+The version-one bundle has these responsibilities:
+
+* `index` is the stable entry point and routes a client to the other current Skills by
+  stable slug, purpose, required inputs and available Brain tools;
+* `ingest` governs Source identity, extracted Markdown, Page selection and provenance;
+* `retrieve` governs folder navigation and authorized Page/Source retrieval using only
+  operations Brain actually exposes;
+* `update` governs immutable version creation and stale-write handling;
+* `lint` audits Skill routing and knowledge quality without mutating by default.
+
+The `index` Skill is a routing contract, not a duplicate implementation of every Skill.
+Linting must verify that its routes resolve to live current Skills, advertised tools exist,
+frontmatter and declared inputs/outputs are valid, and no built-in Skill is unreachable.
+
+## Knowledge linting
+
+The lint Skill should inspect both structural correctness and content quality:
+
+* resolve internal Page links against stable folder/Page paths such as
+  `/about/our-team` and report broken, ambiguous or unauthorized links;
+* identify exact duplicates by content hash and generate semantic duplicate candidates;
+* propose merging materially similar content into one canonical Page while preserving all
+  source provenance and immutable history;
+* find conflicting or superseded facts, Pages without current versions or provenance,
+  stale Source revisions, and navigation/layout drift;
+* validate the curated home Page and Skill index without treating either as the database's
+  authoritative inventory.
+
+A canonical home Page should describe the knowledge base and link to important folder and
+Page entry points. It should remain curated and compact. Exhaustively duplicating hundreds
+of Pages into that Markdown would create another stale index; the folder tree and a
+lightweight generated inventory should remain authoritative for exhaustive navigation.
+
+Linting must scale as a staged workflow rather than loading the whole corpus into one
+model context:
+
+```text
+cheap structural checks and hashes
+            ↓
+authorized folder/Page/Skill inventory
+            ↓
+chunk/search-generated duplicate and drift candidates
+            ↓
+bounded folder or candidate clusters reviewed in parallel
+            ↓
+one compact lint report and proposed change set
+```
+
+Cortex may delegate bounded folders or candidate clusters to subagents, but each agent
+should receive only the relevant content and provenance rather than an intentionally full
+context window. Checkpoints make large audits resumable. Brain supplies deterministic
+inventory, retrieval and mutation contracts; Cortex owns scheduling and orchestration.
+
+A scheduled lint run is read-only by default. Content merges, link rewrites, Source status
+changes and new Page/Skill versions require human confirmation. After approval, Cortex
+must re-read the current version and revalidate the proposal before writing.
+
+## Concurrent edits
+
+Immutable versions prevent history loss, but they do not alone prevent an older edit from
+becoming current after another writer has published. Page and Skill mutations should use
+optimistic concurrency:
+
+```text
+read current version A
+prepare and review update based on A
+create new version only if current version is still A
+otherwise return a conflict and rebase/review against the latest version
+```
+
+The public mutation contract should require `expected_current_version_id` (and may expose
+the same value as an HTTP ETag/`If-Match`). Inside one transaction Brain should lock the
+parent, compare the expected pointer, append the immutable version, and conditionally move
+the current pointer. Ingestion retries should additionally support idempotency keys. A
+human approval is bound to the reviewed base version; it becomes invalid if that base is
+no longer current. Automatic semantic merges are not permitted.
+
+---
+
 # Organisation and navigation
 
 Brain is organisation-aware even if the first deployment contains only one organisation.
+
+The intended deployment model is one Brain/Cortex stack per tenant, with one active
+customer Organization. Brain is not initially a shared multi-tenant SaaS control plane.
+`organization_id` remains valuable as a hard isolation invariant, for synthetic test
+Organizations, and to avoid baking the single deployment assumption into every record;
+tenant discovery, cross-tenant administration and shared-instance provisioning are not
+product requirements.
 
 Top-level domain records should carry an `organization_id`.
 
@@ -919,6 +1030,11 @@ brain/
 │   └── schemas/
 │
 ├── migrations/
+│
+├── content/
+│   └── default/
+│       ├── manifest.yaml
+│       └── skills/
 │
 ├── examples/
 │   └── northstar/
@@ -1570,6 +1686,21 @@ Avoid abstraction for its own sake, but do not spread vendor SDK assumptions thr
 HTTP and MCP expose the same Brain.
 
 They must not become independent implementations.
+
+## Database execution model
+
+The current implementation uses synchronous SQLAlchemy sessions and the synchronous
+psycopg driver. FastAPI runs its synchronous route functions in worker threads, so those
+HTTP database calls do not directly block the ASGI event loop, but throughput is still
+bounded by the thread and database connection pools. The current synchronous FastMCP tool
+functions can occupy MCP request execution while their database work completes.
+
+Before scheduled linting, large retrieval workloads or substantial concurrent use, move
+the shared session/service boundary to SQLAlchemy `AsyncSession` with psycopg's async
+driver, or explicitly and consistently offload synchronous service calls at both
+transports. Do not mix ad hoc sync and async repositories. Async I/O improves request
+concurrency; it does not replace transactions, row locks, optimistic version checks,
+timeouts or a deliberately sized connection pool.
 
 ## Simple first
 
