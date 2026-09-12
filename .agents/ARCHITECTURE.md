@@ -22,7 +22,10 @@ MCP ──────┘                                  └─────> p
 
 Applications may depend on packages; packages must not depend on applications. HTTP and MCP must not independently implement domain rules.
 
-Both implemented applications accept an injected `HealthService`. FastAPI exposes `GET /health`; FastMCP exposes the `health` tool. Neither health check performs database work.
+Both implemented interfaces accept an injected `HealthService`. FastAPI exposes `GET /health`
+and mounts FastMCP's Streamable HTTP transport at `/mcp/` in the same ASGI application;
+FastMCP exposes the `health` tool. The separate `brain-mcp` command preserves the stdio
+transport for local clients. Neither health check performs database work.
 
 ## Durable Data Rules
 

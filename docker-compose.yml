@@ -16,5 +16,26 @@ services:
       timeout: 5s
       retries: 15
 
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://brain:brain@postgres:5432/brain
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
 volumes:
   brain-postgres-data:

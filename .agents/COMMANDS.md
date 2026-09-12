@@ -19,7 +19,8 @@ UV_CACHE_DIR="$PWD/.uv-cache" uv sync --frozen --all-packages
 ## Applications
 
 Verified on 2026-09-12. The API health response was queried at
-`http://127.0.0.1:8000/health`; the MCP command reached its stdio serving loop.
+`http://127.0.0.1:8000/health`, MCP Streamable HTTP is mounted at
+`http://127.0.0.1:8000/mcp/`, and the MCP command reached its stdio serving loop.
 
 ```bash
 UV_CACHE_DIR="$PWD/.uv-cache" uv run brain-api
@@ -37,7 +38,7 @@ UV_CACHE_DIR="$PWD/.uv-cache" uv run pyright
 UV_CACHE_DIR="$PWD/.uv-cache" uv run pytest -m 'not integration' --cov --cov-report=term-missing
 ```
 
-The last command ran five tests with 94.87% branch-aware coverage. The dependency-backed
+The last command ran six tests with 95.29% branch-aware coverage. The dependency-backed
 integration suite is intentionally separate:
 
 ```bash
@@ -52,6 +53,14 @@ The Compose model and application image build were verified on 2026-09-12:
 ```bash
 docker compose config
 docker build -t brain:foundation .
+```
+
+Run the combined FastAPI and FastMCP HTTP application with PostgreSQL:
+
+```bash
+docker compose up -d --build
+docker compose ps
+docker compose down
 ```
 
 Canonical local database lifecycle:
