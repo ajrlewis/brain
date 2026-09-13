@@ -21,7 +21,11 @@ from brain_db.models import (
     Principal,
     Source,
 )
-from brain_db.session import create_engine, create_session_factory, session_scope
+from brain_db.offline import (
+    create_offline_engine,
+    create_offline_session_factory,
+    offline_session_scope,
+)
 
 NAMESPACE = UUID("8d18e949-c857-54f1-87c8-106abf75547c")
 
@@ -41,8 +45,8 @@ def model_table(model: type[Base]) -> Table:
 
 def seed_northstar(database_url: str) -> None:
     """Insert the synthetic Northstar example once, using stable identifiers."""
-    engine = create_engine(SeedSettings(database_url=database_url))
-    factory = create_session_factory(engine)
+    engine = create_offline_engine(SeedSettings(database_url=database_url))
+    factory = create_offline_session_factory(engine)
     org = northstar_id("organization:northstar")
     other_org = northstar_id("organization:harbour")
     alex = northstar_id("principal:alex")
@@ -58,7 +62,7 @@ def seed_northstar(database_url: str) -> None:
     update_source = northstar_id("source:orion-update")
     restricted_source = northstar_id("source:committee-notes")
 
-    with session_scope(factory) as session:
+    with offline_session_scope(factory) as session:
         rows: list[tuple[type[Base], list[dict[str, object]]]] = [
             (
                 Organization,

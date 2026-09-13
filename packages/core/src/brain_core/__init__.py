@@ -9,6 +9,7 @@ from brain_core.knowledge import (
     VersionConflict,
     create_knowledge_service,
 )
+from brain_core.persistence import create_persistence_services
 from brain_core.settings import Settings
 from brain_core.skills import (
     DuplicateSkillContent,
@@ -34,5 +35,6 @@ __all__ = [
     "VersionConflict",
     "create_knowledge_service",
     "create_local_authenticator",
+    "create_persistence_services",
     "create_skill_service",
 ]

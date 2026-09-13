@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from brain_db.models import (
     AccessPolicy,
@@ -22,15 +22,15 @@ from brain_db.models import (
 class Repository:
     """Base for repositories participating in a caller-owned unit of work."""
 
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
 
 class KnowledgeRepository(Repository):
     """Persistence operations for a caller-owned knowledge unit of work."""
 
-    def policy_group_ids(self, organization_id: UUID, policy_id: UUID) -> set[UUID] | None:
-        policy = self.session.scalar(
+    async def policy_group_ids(self, organization_id: UUID, policy_id: UUID) -> set[UUID] | None:
+        policy = await self.session.scalar(
             select(AccessPolicy.id).where(
                 AccessPolicy.id == policy_id,
                 AccessPolicy.organization_id == organization_id,
@@ -40,7 +40,7 @@ class KnowledgeRepository(Repository):
         if policy is None:
             return None
         return set(
-            self.session.scalars(
+            await self.session.scalars(
                 select(AccessPolicyGroup.group_id).where(
                     AccessPolicyGroup.organization_id == organization_id,
                     AccessPolicyGroup.access_policy_id == policy_id,
@@ -48,9 +48,9 @@ class KnowledgeRepository(Repository):
             )
         )
 
-    def principal_exists(self, organization_id: UUID, principal_id: UUID) -> bool:
+    async def principal_exists(self, organization_id: UUID, principal_id: UUID) -> bool:
         return (
-            self.session.scalar(
+            await self.session.scalar(
                 select(Principal.id).where(
                     Principal.id == principal_id,
                     Principal.organization_id == organization_id,
@@ -61,15 +61,15 @@ class KnowledgeRepository(Repository):
             is not None
         )
 
-    def context_is_valid(
+    async def context_is_valid(
         self, organization_id: UUID, principal_id: UUID, group_ids: frozenset[UUID]
     ) -> bool:
-        if not self.principal_exists(organization_id, principal_id):
+        if not await self.principal_exists(organization_id, principal_id):
             return False
         if not group_ids:
             return True
         valid_group_ids = set(
-            self.session.scalars(
+            await self.session.scalars(
                 select(Group.id)
                 .join(
                     GroupMembership,
@@ -86,8 +86,8 @@ class KnowledgeRepository(Repository):
         )
         return valid_group_ids == set(group_ids)
 
-    def get_folder(self, organization_id: UUID, folder_id: UUID) -> Folder | None:
-        return self.session.scalar(
+    async def get_folder(self, organization_id: UUID, folder_id: UUID) -> Folder | None:
+        return await self.session.scalar(
             select(Folder).where(
                 Folder.id == folder_id,
                 Folder.organization_id == organization_id,
@@ -95,9 +95,9 @@ class KnowledgeRepository(Repository):
             )
         )
 
-    def folders(self, organization_id: UUID) -> list[Folder]:
+    async def folders(self, organization_id: UUID) -> list[Folder]:
         return list(
-            self.session.scalars(
+            await self.session.scalars(
                 select(Folder).where(
                     Folder.organization_id == organization_id,
                     Folder.deleted_at.is_(None),
@@ -105,12 +105,12 @@ class KnowledgeRepository(Repository):
             )
         )
 
-    def add_folder(self, folder: Folder) -> None:
+    async def add_folder(self, folder: Folder) -> None:
         self.session.add(folder)
-        self.session.flush()
+        await self.session.flush()
 
-    def get_source(self, organization_id: UUID, source_id: UUID) -> Source | None:
-        return self.session.scalar(
+    async def get_source(self, organization_id: UUID, source_id: UUID) -> Source | None:
+        return await self.session.scalar(
             select(Source).where(
                 Source.id == source_id,
                 Source.organization_id == organization_id,
@@ -118,13 +118,13 @@ class KnowledgeRepository(Repository):
             )
         )
 
-    def add_source(self, source: Source) -> None:
+    async def add_source(self, source: Source) -> None:
         self.session.add(source)
-        self.session.flush()
+        await self.session.flush()
 
-    def source_inventory(self, organization_id: UUID) -> list[Source]:
+    async def source_inventory(self, organization_id: UUID) -> list[Source]:
         return list(
-            self.session.scalars(
+            await self.session.scalars(
                 select(Source)
                 .where(
                     Source.organization_id == organization_id,
@@ -134,21 +134,23 @@ class KnowledgeRepository(Repository):
             )
         )
 
-    def get_page(self, organization_id: UUID, page_id: UUID, *, lock: bool = False) -> Page | None:
+    async def get_page(
+        self, organization_id: UUID, page_id: UUID, *, lock: bool = False
+    ) -> Page | None:
         query = select(Page).where(
             Page.id == page_id,
             Page.organization_id == organization_id,
             Page.deleted_at.is_(None),
         )
-        return self.session.scalar(query.with_for_update() if lock else query)
+        return await self.session.scalar(query.with_for_update() if lock else query)
 
-    def add_page(self, page: Page) -> None:
+    async def add_page(self, page: Page) -> None:
         self.session.add(page)
-        self.session.flush()
+        await self.session.flush()
 
-    def pages(self, organization_id: UUID) -> list[Page]:
+    async def pages(self, organization_id: UUID) -> list[Page]:
         return list(
-            self.session.scalars(
+            await self.session.scalars(
                 select(Page)
                 .where(
                     Page.organization_id == organization_id,
@@ -159,41 +161,44 @@ class KnowledgeRepository(Repository):
             )
         )
 
-    def page_inventory(self, organization_id: UUID) -> list[tuple[Page, UUID, str]]:
+    async def page_inventory(self, organization_id: UUID) -> list[tuple[Page, UUID, str]]:
         return list(
-            self.session.execute(
-                select(Page, PageVersion.id, PageVersion.content_hash)
-                .join(
-                    PageVersion,
-                    (PageVersion.page_id == Page.id) & (PageVersion.id == Page.current_version_id),
+            (
+                await self.session.execute(
+                    select(Page, PageVersion.id, PageVersion.content_hash)
+                    .join(
+                        PageVersion,
+                        (PageVersion.page_id == Page.id)
+                        & (PageVersion.id == Page.current_version_id),
+                    )
+                    .where(
+                        Page.organization_id == organization_id,
+                        Page.deleted_at.is_(None),
+                    )
+                    .order_by(Page.position, Page.slug)
                 )
-                .where(
-                    Page.organization_id == organization_id,
-                    Page.deleted_at.is_(None),
-                )
-                .order_by(Page.position, Page.slug)
             ).tuples()
         )
 
-    def add_version(self, version: PageVersion) -> None:
+    async def add_version(self, version: PageVersion) -> None:
         self.session.add(version)
-        self.session.flush()
+        await self.session.flush()
 
-    def add_version_source(self, link: PageVersionSource) -> None:
+    async def add_version_source(self, link: PageVersionSource) -> None:
         self.session.add(link)
 
-    def versions(self, page_id: UUID) -> list[PageVersion]:
+    async def versions(self, page_id: UUID) -> list[PageVersion]:
         return list(
-            self.session.scalars(
+            await self.session.scalars(
                 select(PageVersion)
                 .where(PageVersion.page_id == page_id)
                 .order_by(PageVersion.version)
             )
         )
 
-    def next_version(self, page_id: UUID) -> int:
+    async def next_version(self, page_id: UUID) -> int:
         return (
-            self.session.scalar(
+            await self.session.scalar(
                 select(func.coalesce(func.max(PageVersion.version), 0)).where(
                     PageVersion.page_id == page_id
                 )
@@ -201,20 +206,22 @@ class KnowledgeRepository(Repository):
             or 0
         ) + 1
 
-    def provenance(self, version_id: UUID) -> list[tuple[PageVersionSource, Source]]:
+    async def provenance(self, version_id: UUID) -> list[tuple[PageVersionSource, Source]]:
         return list(
-            self.session.execute(
-                select(PageVersionSource, Source)
-                .join(
-                    Source,
-                    (Source.id == PageVersionSource.source_id)
-                    & (Source.organization_id == PageVersionSource.organization_id),
+            (
+                await self.session.execute(
+                    select(PageVersionSource, Source)
+                    .join(
+                        Source,
+                        (Source.id == PageVersionSource.source_id)
+                        & (Source.organization_id == PageVersionSource.organization_id),
+                    )
+                    .where(
+                        PageVersionSource.page_version_id == version_id,
+                        Source.deleted_at.is_(None),
+                    )
+                    .order_by(Source.id, PageVersionSource.relationship)
                 )
-                .where(
-                    PageVersionSource.page_version_id == version_id,
-                    Source.deleted_at.is_(None),
-                )
-                .order_by(Source.id, PageVersionSource.relationship)
             ).tuples()
         )
 
@@ -222,7 +229,7 @@ class KnowledgeRepository(Repository):
 class SkillRepository(KnowledgeRepository):
     """Persistence operations for a caller-owned Skill unit of work."""
 
-    def get_skill(
+    async def get_skill(
         self, organization_id: UUID, skill_id: UUID, *, lock: bool = False
     ) -> Skill | None:
         query = select(Skill).where(
@@ -230,10 +237,10 @@ class SkillRepository(KnowledgeRepository):
             Skill.organization_id == organization_id,
             Skill.deleted_at.is_(None),
         )
-        return self.session.scalar(query.with_for_update() if lock else query)
+        return await self.session.scalar(query.with_for_update() if lock else query)
 
-    def get_skill_by_slug(self, organization_id: UUID, slug: str) -> Skill | None:
-        return self.session.scalar(
+    async def get_skill_by_slug(self, organization_id: UUID, slug: str) -> Skill | None:
+        return await self.session.scalar(
             select(Skill).where(
                 Skill.organization_id == organization_id,
                 Skill.slug == slug,
@@ -241,9 +248,9 @@ class SkillRepository(KnowledgeRepository):
             )
         )
 
-    def skills(self, organization_id: UUID) -> list[Skill]:
+    async def skills(self, organization_id: UUID) -> list[Skill]:
         return list(
-            self.session.scalars(
+            await self.session.scalars(
                 select(Skill)
                 .where(
                     Skill.organization_id == organization_id,
@@ -254,43 +261,45 @@ class SkillRepository(KnowledgeRepository):
             )
         )
 
-    def skill_inventory(self, organization_id: UUID) -> list[tuple[Skill, UUID, str]]:
+    async def skill_inventory(self, organization_id: UUID) -> list[tuple[Skill, UUID, str]]:
         return list(
-            self.session.execute(
-                select(Skill, SkillVersion.id, SkillVersion.content_hash)
-                .join(
-                    SkillVersion,
-                    (SkillVersion.skill_id == Skill.id)
-                    & (SkillVersion.id == Skill.current_version_id),
+            (
+                await self.session.execute(
+                    select(Skill, SkillVersion.id, SkillVersion.content_hash)
+                    .join(
+                        SkillVersion,
+                        (SkillVersion.skill_id == Skill.id)
+                        & (SkillVersion.id == Skill.current_version_id),
+                    )
+                    .where(
+                        Skill.organization_id == organization_id,
+                        Skill.deleted_at.is_(None),
+                    )
+                    .order_by(Skill.position, Skill.slug)
                 )
-                .where(
-                    Skill.organization_id == organization_id,
-                    Skill.deleted_at.is_(None),
-                )
-                .order_by(Skill.position, Skill.slug)
             ).tuples()
         )
 
-    def add_skill(self, skill: Skill) -> None:
+    async def add_skill(self, skill: Skill) -> None:
         self.session.add(skill)
-        self.session.flush()
+        await self.session.flush()
 
-    def add_skill_version(self, version: SkillVersion) -> None:
+    async def add_skill_version(self, version: SkillVersion) -> None:
         self.session.add(version)
-        self.session.flush()
+        await self.session.flush()
 
-    def skill_versions(self, skill_id: UUID) -> list[SkillVersion]:
+    async def skill_versions(self, skill_id: UUID) -> list[SkillVersion]:
         return list(
-            self.session.scalars(
+            await self.session.scalars(
                 select(SkillVersion)
                 .where(SkillVersion.skill_id == skill_id)
                 .order_by(SkillVersion.version)
             )
         )
 
-    def next_skill_version(self, skill_id: UUID) -> int:
+    async def next_skill_version(self, skill_id: UUID) -> int:
         return (
-            self.session.scalar(
+            await self.session.scalar(
                 select(func.coalesce(func.max(SkillVersion.version), 0)).where(
                     SkillVersion.skill_id == skill_id
                 )

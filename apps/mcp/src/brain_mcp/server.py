@@ -1,10 +1,10 @@
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from uuid import UUID
 
-from anyio import to_thread
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from fastmcp.server.dependencies import get_http_headers
+from sqlalchemy.exc import SQLAlchemyError
 
 from brain_auth import (
     AuthContext,
@@ -27,6 +27,7 @@ from brain_core import (
     VersionConflict,
     create_knowledge_service,
     create_local_authenticator,
+    create_persistence_services,
     create_skill_service,
 )
 from brain_core.settings import get_settings
@@ -65,8 +66,15 @@ def create_server(
         settings=resolved_settings,
     )
     resolved_identity_service = identity_service or IdentityService()
-    resolved_knowledge_service = knowledge_service or create_knowledge_service(resolved_settings)
-    resolved_skill_service = skill_service or create_skill_service(resolved_settings)
+    if knowledge_service is None and skill_service is None:
+        resolved_knowledge_service, resolved_skill_service = create_persistence_services(
+            resolved_settings
+        )
+    else:
+        resolved_knowledge_service = knowledge_service or create_knowledge_service(
+            resolved_settings
+        )
+        resolved_skill_service = skill_service or create_skill_service(resolved_settings)
     resolved_authenticator = authenticator or create_local_authenticator(resolved_settings)
     server = FastMCP(name="Brain")
 
@@ -93,108 +101,106 @@ def create_server(
     @server.tool
     async def create_folder(request: FolderCreate) -> FolderResponse:
         """Create a governed Page folder."""
-        return await call_knowledge_async(
+        return await call_knowledge(
             resolved_knowledge_service.create_folder, authenticated(), request
         )
 
     @server.tool
     async def get_folder(folder_id: UUID) -> FolderResponse:
         """Read an authorized live Page folder."""
-        return await call_knowledge_async(
+        return await call_knowledge(
             resolved_knowledge_service.get_folder, authenticated(), folder_id
         )
 
     @server.tool
     async def create_source(request: SourceCreate) -> SourceResponse:
         """Create Source identity and structured provenance metadata."""
-        return await call_knowledge_async(
+        return await call_knowledge(
             resolved_knowledge_service.create_source, authenticated(), request
         )
 
     @server.tool
     async def get_source(source_id: UUID) -> SourceResponse:
         """Read an independently authorized live Source."""
-        return await call_knowledge_async(
+        return await call_knowledge(
             resolved_knowledge_service.get_source, authenticated(), source_id
         )
 
     @server.tool
     async def list_sources() -> list[SourceInventoryItem]:
         """List authorized live Source identities and freshness fields."""
-        return await call_knowledge_async(resolved_knowledge_service.list_sources, authenticated())
+        return await call_knowledge(resolved_knowledge_service.list_sources, authenticated())
 
     @server.tool
     async def create_page(request: PageCreate) -> PageResponse:
         """Create a Page with its first immutable Markdown version."""
-        return await call_knowledge_async(
+        return await call_knowledge(
             resolved_knowledge_service.create_page, authenticated(), request
         )
 
     @server.tool
     async def get_page(page_id: UUID) -> PageResponse:
         """Read an authorized Page, versions, and visible provenance."""
-        return await call_knowledge_async(
-            resolved_knowledge_service.get_page, authenticated(), page_id
-        )
+        return await call_knowledge(resolved_knowledge_service.get_page, authenticated(), page_id)
 
     @server.tool
     async def list_pages() -> list[PageInventoryItem]:
         """List authorized live Pages with stable paths and current hashes."""
-        return await call_knowledge_async(resolved_knowledge_service.list_pages, authenticated())
+        return await call_knowledge(resolved_knowledge_service.list_pages, authenticated())
 
     @server.tool
     async def get_page_by_path(path: str) -> PageResponse:
         """Read an authorized live Page by its stable folder/Page path."""
-        return await call_knowledge_async(
+        return await call_knowledge(
             resolved_knowledge_service.get_page_by_path, authenticated(), path
         )
 
     @server.tool
     async def create_page_version(page_id: UUID, request: PageVersionCreate) -> PageResponse:
         """Append an immutable Page version and make it current."""
-        return await call_knowledge_async(
+        return await call_knowledge(
             resolved_knowledge_service.create_page_version, authenticated(), page_id, request
         )
 
     @server.tool
     async def create_skill(request: SkillCreate) -> SkillResponse:
         """Create a Skill with its first validated immutable document."""
-        return await call_knowledge_async(
-            resolved_skill_service.create_skill, authenticated(), request
-        )
+        return await call_knowledge(resolved_skill_service.create_skill, authenticated(), request)
 
     @server.tool
     async def list_skills() -> list[SkillInventoryItem]:
         """List authorized live Skills and their current content hashes."""
-        return await call_knowledge_async(resolved_skill_service.list_skills, authenticated())
+        return await call_knowledge(resolved_skill_service.list_skills, authenticated())
 
     @server.tool
     async def get_skill(skill_id: UUID, version: int | None = None) -> SkillResponse:
         """Read an authorized Skill, optionally selecting an immutable version."""
-        return await call_knowledge_async(
+        return await call_knowledge(
             resolved_skill_service.get_skill, authenticated(), skill_id, version
         )
 
     @server.tool
     async def get_skill_by_slug(slug: str, version: int | None = None) -> SkillResponse:
         """Read an authorized Skill by stable slug."""
-        return await call_knowledge_async(
+        return await call_knowledge(
             resolved_skill_service.get_skill_by_slug, authenticated(), slug, version
         )
 
     @server.tool
     async def create_skill_version(skill_id: UUID, request: SkillVersionCreate) -> SkillResponse:
         """Append a validated Skill document if its reviewed base is still current."""
-        return await call_knowledge_async(
+        return await call_knowledge(
             resolved_skill_service.create_skill_version, authenticated(), skill_id, request
         )
 
     return server
 
 
-def call_knowledge[**P, R](function: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
+async def call_knowledge[**P, R](
+    function: Callable[P, Awaitable[R]], *args: P.args, **kwargs: P.kwargs
+) -> R:
     try:
-        return function(*args, **kwargs)
+        return await function(*args, **kwargs)
     except (
         AuthorizationDenied,
         DuplicatePageContent,
@@ -207,17 +213,8 @@ def call_knowledge[**P, R](function: Callable[P, R], *args: P.args, **kwargs: P.
         InvalidSkillDocument,
     ) as error:
         raise ToolError(str(error)) from error
-
-
-async def call_knowledge_async[**P, R](
-    function: Callable[P, R], *args: P.args, **kwargs: P.kwargs
-) -> R:
-    """Run the synchronous shared service boundary without blocking MCP's event loop."""
-
-    def invoke() -> R:
-        return call_knowledge(function, *args, **kwargs)
-
-    return await to_thread.run_sync(invoke)
+    except SQLAlchemyError as error:
+        raise ToolError("Database operation unavailable") from error
 
 
 mcp = create_server()

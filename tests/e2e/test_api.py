@@ -4,6 +4,7 @@ from uuid import UUID
 
 from fastapi.testclient import TestClient
 from httpx import Response
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 from brain_api import create_app
 from brain_auth import AuthContext, LocalBearerAuthenticator
@@ -25,11 +26,16 @@ class FolderKnowledgeService(KnowledgeService):
     def __init__(self, folder: FolderResponse) -> None:
         self.folder = folder
 
-    def create_folder(self, context: AuthContext, request: FolderCreate) -> FolderResponse:
+    async def create_folder(self, context: AuthContext, request: FolderCreate) -> FolderResponse:
         return self.folder
 
-    def get_folder(self, context: AuthContext, folder_id: UUID) -> FolderResponse:
+    async def get_folder(self, context: AuthContext, folder_id: UUID) -> FolderResponse:
         raise KnowledgeNotFound("Folder was not found")
+
+
+class UnavailableKnowledgeService(FolderKnowledgeService):
+    async def create_folder(self, context: AuthContext, request: FolderCreate) -> FolderResponse:
+        raise SQLAlchemyTimeoutError("pool exhausted")
 
 
 class HttpClient(Protocol):
@@ -127,3 +133,45 @@ def test_http_knowledge_routes_are_thin_authenticated_adapters() -> None:
     assert created.status_code == 201
     assert created.json()["id"] == str(folder_id)
     assert missing.status_code == 404
+
+
+def test_http_database_timeout_is_a_controlled_failure() -> None:
+    context = AuthContext(
+        UUID("10000000-0000-0000-0000-000000000001"),
+        UUID("20000000-0000-0000-0000-000000000001"),
+        frozenset(),
+    )
+    now = datetime.now(UTC)
+    folder = FolderResponse(
+        id=UUID("50000000-0000-0000-0000-000000000001"),
+        organization_id=context.organization_id,
+        parent_id=None,
+        kind="page",
+        slug="knowledge",
+        name="Knowledge",
+        description=None,
+        access_policy_id=UUID("40000000-0000-0000-0000-000000000001"),
+        position=0,
+        steward_id=context.principal_id,
+        created_at=now,
+        updated_at=now,
+    )
+    app = create_app(
+        knowledge_service=UnavailableKnowledgeService(folder),
+        authenticator=LocalBearerAuthenticator(token="secret", context=context),
+    )
+    client = cast(HttpClient, TestClient(app))
+
+    response = client.post(
+        "/folders",
+        headers={"Authorization": "Bearer secret"},
+        json={
+            "slug": "knowledge",
+            "name": "Knowledge",
+            "access_policy_id": "40000000-0000-0000-0000-000000000001",
+            "steward_id": str(context.principal_id),
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Database operation unavailable"}

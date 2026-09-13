@@ -4,6 +4,11 @@ Completed persistent setup work, newest first. This is not a changelog or produc
 
 ## Completed Items
 
+- 2026-09-13 — Migrated all runtime database access to a shared SQLAlchemy AsyncSession and
+  psycopg async boundary across repositories, services, FastAPI, and FastMCP; separated the
+  synchronous offline seed/migration utility; added typed pool and PostgreSQL timeouts; and
+  verified session isolation, stale-writer races, controlled timeouts, and 100 concurrent
+  HTTP/MCP reads with a smaller pool.
 - 2026-09-13 — Added stale-safe Page and Skill version publication, tenant-safe immutable Skill persistence, shared HTTP/MCP Skill and bounded inventory operations, worker-thread offloading for synchronous MCP database services, and the explicit idempotent five-Skill default bundle seed. Verified clean migration and zero metadata drift, transport parity, local-divergence preservation, quality checks, PostgreSQL integration, Compose rendering, and the Docker image.
 - 2026-09-12 — Implemented the first governed knowledge slice: tenant-safe Folder, Source, Page, immutable PageVersion, and provenance persistence; shared HTTP/MCP create/read services with provenance intersection; and an idempotent synthetic Northstar seed.
 - 2026-09-12 — Added the first Alembic migration and PostgreSQL-backed identity/access-control foundation, including tenant-safe constraints, explicit Compose migration ordering, and shared HTTP/MCP local bearer authentication.

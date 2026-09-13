@@ -14,13 +14,24 @@ from brain_db.models import (
     SkillVersion,
     Source,
 )
+from brain_db.offline import (
+    create_offline_engine,
+    create_offline_session_factory,
+    offline_session_scope,
+)
 from brain_db.repositories import KnowledgeRepository, Repository, SkillRepository
-from brain_db.session import SessionFactory, create_engine, create_session_factory, session_scope
+from brain_db.session import (
+    AsyncSessionFactory,
+    async_session_scope,
+    create_async_engine,
+    create_async_session_factory,
+)
 
 __all__ = [
     "NAMING_CONVENTION",
     "AccessPolicy",
     "AccessPolicyGroup",
+    "AsyncSessionFactory",
     "Base",
     "Folder",
     "Group",
@@ -32,12 +43,14 @@ __all__ = [
     "PageVersionSource",
     "Principal",
     "Repository",
-    "SessionFactory",
     "Skill",
     "SkillRepository",
     "SkillVersion",
     "Source",
-    "create_engine",
-    "create_session_factory",
-    "session_scope",
+    "async_session_scope",
+    "create_async_engine",
+    "create_async_session_factory",
+    "create_offline_engine",
+    "create_offline_session_factory",
+    "offline_session_scope",
 ]

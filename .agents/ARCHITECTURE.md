@@ -78,17 +78,17 @@ Use a provider-neutral `AuthContext` containing organization, principal, and gro
 
 The implemented stack is Python 3.13+, uv, FastAPI, FastMCP, Pydantic v2, SQLAlchemy 2.x, Alembic, psycopg, pgvector, PostgreSQL 17 with pgvector, pytest, Ruff, Pyright, Docker, and GitHub Actions.
 
-Database access currently uses synchronous SQLAlchemy sessions and psycopg. The supported
-initial deployment is one Organization with roughly 400 potential users. FastAPI's
-synchronous handlers run in worker threads, and FastMCP database tools explicitly offload
-the same synchronous services so neither transport blocks its event loop. Each operation
-owns a session and the database pool bounds active work.
+Runtime database access uses SQLAlchemy `AsyncSession` with psycopg async. FastAPI and FastMCP
+directly await the same persistence-backed application services with one caller-owned session
+per operation; sessions are never shared across concurrent tasks. Page and Skill publication
+lock the parent row before comparing the reviewed current version and atomically committing a
+new immutable version. Alembic and explicit seed commands alone use the clearly separated
+synchronous offline database utility.
 
-This is the concrete initial concurrency decision, not a permanent rejection of async.
-Before high-fanout linting, or when load tests show worker/database-pool saturation, migrate
-the complete shared session, repository, and service boundary to SQLAlchemy `AsyncSession`
-with psycopg async. Do not convert isolated handlers or repositories: mixed blocking and
-async persistence would retain blocking while creating divergent behavior.
+The supported initial deployment remains one Organization with roughly 400 potential users.
+Typed pool size, overflow, acquisition timeout, recycling, PostgreSQL statement timeout, and
+lock timeout settings bound database work. Pool capacity is sized against the PostgreSQL
+connection budget across all processes and replicas, not against the raw potential-user count.
 
 The service should remain containerizable and host-independent even though production is intended for Vercel with managed PostgreSQL. Repository code and migrations are canonical; hosted systems are authoritative only for live deployment and database state. Deployment, production data access or mutation, hosted configuration changes, and secret changes require explicit maintainer authorization.
 

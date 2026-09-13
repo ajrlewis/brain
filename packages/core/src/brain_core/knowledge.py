@@ -6,16 +6,16 @@ from sqlalchemy.exc import IntegrityError
 from brain_auth import AuthContext, AuthorizationDenied, require_access
 from brain_core.settings import Settings
 from brain_db import (
+    AsyncSessionFactory,
     Folder,
     KnowledgeRepository,
     Page,
     PageVersion,
     PageVersionSource,
-    SessionFactory,
     Source,
-    create_engine,
-    create_session_factory,
-    session_scope,
+    async_session_scope,
+    create_async_engine,
+    create_async_session_factory,
 )
 from brain_schemas import (
     FolderCreate,
@@ -56,20 +56,20 @@ class InvalidKnowledgeReference(Exception):
 class KnowledgeService:
     """Govern knowledge through one shared HTTP/MCP application boundary."""
 
-    def __init__(self, session_factory: SessionFactory) -> None:
+    def __init__(self, session_factory: AsyncSessionFactory) -> None:
         self.session_factory = session_factory
 
-    def create_folder(self, context: AuthContext, request: FolderCreate) -> FolderResponse:
-        with session_scope(self.session_factory) as session:
+    async def create_folder(self, context: AuthContext, request: FolderCreate) -> FolderResponse:
+        async with async_session_scope(self.session_factory) as session:
             repository = KnowledgeRepository(session)
-            self._require_context(repository, context)
-            self._require_principal(repository, context, request.steward_id)
-            self._require_policy(repository, context, request.access_policy_id)
+            await self._require_context(repository, context)
+            await self._require_principal(repository, context, request.steward_id)
+            await self._require_policy(repository, context, request.access_policy_id)
             if request.parent_id is not None:
-                parent = repository.get_folder(context.organization_id, request.parent_id)
+                parent = await repository.get_folder(context.organization_id, request.parent_id)
                 if parent is None:
                     raise InvalidKnowledgeReference("Parent folder was not found")
-                self._require_resource(repository, context, parent.access_policy_id)
+                await self._require_resource(repository, context, parent.access_policy_id)
             folder = Folder(
                 organization_id=context.organization_id,
                 parent_id=request.parent_id,
@@ -84,27 +84,27 @@ class KnowledgeService:
                 updated_by_id=context.principal_id,
             )
             try:
-                repository.add_folder(folder)
+                await repository.add_folder(folder)
             except IntegrityError as error:
                 raise KnowledgeConflict("Folder conflicts with an existing record") from error
             return self._folder_response(folder)
 
-    def get_folder(self, context: AuthContext, folder_id: UUID) -> FolderResponse:
-        with session_scope(self.session_factory) as session:
+    async def get_folder(self, context: AuthContext, folder_id: UUID) -> FolderResponse:
+        async with async_session_scope(self.session_factory) as session:
             repository = KnowledgeRepository(session)
-            self._require_context(repository, context)
-            folder = repository.get_folder(context.organization_id, folder_id)
+            await self._require_context(repository, context)
+            folder = await repository.get_folder(context.organization_id, folder_id)
             if folder is None:
                 raise KnowledgeNotFound("Folder was not found")
-            self._require_resource(repository, context, folder.access_policy_id)
+            await self._require_resource(repository, context, folder.access_policy_id)
             return self._folder_response(folder)
 
-    def create_source(self, context: AuthContext, request: SourceCreate) -> SourceResponse:
-        with session_scope(self.session_factory) as session:
+    async def create_source(self, context: AuthContext, request: SourceCreate) -> SourceResponse:
+        async with async_session_scope(self.session_factory) as session:
             repository = KnowledgeRepository(session)
-            self._require_context(repository, context)
-            self._require_principal(repository, context, request.steward_id)
-            self._require_policy(repository, context, request.access_policy_id)
+            await self._require_context(repository, context)
+            await self._require_principal(repository, context, request.steward_id)
+            await self._require_policy(repository, context, request.access_policy_id)
             source = Source(
                 organization_id=context.organization_id,
                 source_type=request.source_type,
@@ -120,29 +120,29 @@ class KnowledgeService:
                 steward_id=request.steward_id,
             )
             try:
-                repository.add_source(source)
+                await repository.add_source(source)
             except IntegrityError as error:
                 raise KnowledgeConflict("Source conflicts with an existing record") from error
             return self._source_response(source)
 
-    def get_source(self, context: AuthContext, source_id: UUID) -> SourceResponse:
-        with session_scope(self.session_factory) as session:
+    async def get_source(self, context: AuthContext, source_id: UUID) -> SourceResponse:
+        async with async_session_scope(self.session_factory) as session:
             repository = KnowledgeRepository(session)
-            self._require_context(repository, context)
-            source = repository.get_source(context.organization_id, source_id)
+            await self._require_context(repository, context)
+            source = await repository.get_source(context.organization_id, source_id)
             if source is None:
                 raise KnowledgeNotFound("Source was not found")
-            self._require_resource(repository, context, source.access_policy_id)
+            await self._require_resource(repository, context, source.access_policy_id)
             return self._source_response(source)
 
-    def list_sources(self, context: AuthContext) -> list[SourceInventoryItem]:
-        with session_scope(self.session_factory) as session:
+    async def list_sources(self, context: AuthContext) -> list[SourceInventoryItem]:
+        async with async_session_scope(self.session_factory) as session:
             repository = KnowledgeRepository(session)
-            self._require_context(repository, context)
+            await self._require_context(repository, context)
             result: list[SourceInventoryItem] = []
-            for source in repository.source_inventory(context.organization_id):
+            for source in await repository.source_inventory(context.organization_id):
                 try:
-                    self._require_resource(repository, context, source.access_policy_id)
+                    await self._require_resource(repository, context, source.access_policy_id)
                 except AuthorizationDenied:
                     continue
                 result.append(
@@ -157,12 +157,12 @@ class KnowledgeService:
                 )
             return result
 
-    def create_page(self, context: AuthContext, request: PageCreate) -> PageResponse:
-        with session_scope(self.session_factory) as session:
+    async def create_page(self, context: AuthContext, request: PageCreate) -> PageResponse:
+        async with async_session_scope(self.session_factory) as session:
             repository = KnowledgeRepository(session)
-            self._require_context(repository, context)
-            self._validate_page_references(repository, context, request)
-            self._validate_sources(repository, context, request.sources)
+            await self._require_context(repository, context)
+            await self._validate_page_references(repository, context, request)
+            await self._validate_sources(repository, context, request.sources)
             page = Page(
                 organization_id=context.organization_id,
                 folder_id=request.folder_id,
@@ -175,69 +175,72 @@ class KnowledgeService:
                 updated_by_id=context.principal_id,
             )
             try:
-                repository.add_page(page)
+                await repository.add_page(page)
             except IntegrityError as error:
                 raise KnowledgeConflict("Page conflicts with an existing record") from error
             try:
-                version = self._insert_version(
+                version = await self._insert_version(
                     repository, context, page, request.content_markdown, request.sources
                 )
             except IntegrityError as error:
                 raise KnowledgeConflict("Page version conflicts with existing history") from error
             page.current_version_id = version.id
-            session.flush()
-            return self._page_response(repository, context, page)
+            await session.flush()
+            return await self._page_response(repository, context, page)
 
-    def create_page_version(
+    async def create_page_version(
         self, context: AuthContext, page_id: UUID, request: PageVersionCreate
     ) -> PageResponse:
-        with session_scope(self.session_factory) as session:
+        async with async_session_scope(self.session_factory) as session:
             repository = KnowledgeRepository(session)
-            self._require_context(repository, context)
-            page = repository.get_page(context.organization_id, page_id, lock=True)
+            await self._require_context(repository, context)
+            page = await repository.get_page(context.organization_id, page_id, lock=True)
             if page is None:
                 raise KnowledgeNotFound("Page was not found")
-            self._require_resource(repository, context, page.access_policy_id)
+            await self._require_resource(repository, context, page.access_policy_id)
             if page.current_version_id != request.expected_current_version_id:
                 raise VersionConflict("The Page current version has changed")
-            self._validate_sources(repository, context, request.sources)
+            await self._validate_sources(repository, context, request.sources)
             content_hash = sha256(request.content_markdown.encode()).hexdigest()
             if any(
-                version.content_hash == content_hash for version in repository.versions(page.id)
+                version.content_hash == content_hash
+                for version in await repository.versions(page.id)
             ):
                 raise DuplicatePageContent("This content already exists for the Page")
             try:
-                version = self._insert_version(
+                version = await self._insert_version(
                     repository, context, page, request.content_markdown, request.sources
                 )
             except IntegrityError as error:
                 raise KnowledgeConflict("Page version conflicts with existing history") from error
             page.current_version_id = version.id
             page.updated_by_id = context.principal_id
-            session.flush()
-            return self._page_response(repository, context, page)
+            await session.flush()
+            return await self._page_response(repository, context, page)
 
-    def get_page(self, context: AuthContext, page_id: UUID) -> PageResponse:
-        with session_scope(self.session_factory) as session:
+    async def get_page(self, context: AuthContext, page_id: UUID) -> PageResponse:
+        async with async_session_scope(self.session_factory) as session:
             repository = KnowledgeRepository(session)
-            self._require_context(repository, context)
-            page = repository.get_page(context.organization_id, page_id)
+            await self._require_context(repository, context)
+            page = await repository.get_page(context.organization_id, page_id)
             if page is None or page.current_version_id is None:
                 raise KnowledgeNotFound("Page was not found")
-            self._require_resource(repository, context, page.access_policy_id)
-            return self._page_response(repository, context, page)
+            await self._require_resource(repository, context, page.access_policy_id)
+            return await self._page_response(repository, context, page)
 
-    def list_pages(self, context: AuthContext) -> list[PageInventoryItem]:
-        with session_scope(self.session_factory) as session:
+    async def list_pages(self, context: AuthContext) -> list[PageInventoryItem]:
+        async with async_session_scope(self.session_factory) as session:
             repository = KnowledgeRepository(session)
-            self._require_context(repository, context)
-            folders = {folder.id: folder for folder in repository.folders(context.organization_id)}
+            await self._require_context(repository, context)
+            folders = {
+                folder.id: folder for folder in await repository.folders(context.organization_id)
+            }
             inventory: list[PageInventoryItem] = []
-            for page, current_version_id, content_hash in repository.page_inventory(
+            for page, current_version_id, content_hash in await repository.page_inventory(
                 context.organization_id
             ):
                 try:
-                    self._require_resource(repository, context, page.access_policy_id)
+                    await self._require_resource(repository, context, page.access_policy_id)
                 except AuthorizationDenied:
                     continue
                 inventory.append(
@@ -252,14 +255,16 @@ class KnowledgeService:
                 )
             return sorted(inventory, key=lambda item: item.path)
 
-    def get_page_by_path(self, context: AuthContext, path: str) -> PageResponse:
+    async def get_page_by_path(self, context: AuthContext, path: str) -> PageResponse:
         normalized = "/" + path.strip("/")
-        match = next((item for item in self.list_pages(context) if item.path == normalized), None)
+        match = next(
+            (item for item in await self.list_pages(context) if item.path == normalized), None
+        )
         if match is None:
             raise KnowledgeNotFound("Page was not found")
-        return self.get_page(context, match.id)
+        return await self.get_page(context, match.id)
 
-    def _insert_version(
+    async def _insert_version(
         self,
         repository: KnowledgeRepository,
         context: AuthContext,
@@ -270,14 +275,14 @@ class KnowledgeService:
         version = PageVersion(
             organization_id=context.organization_id,
             page_id=page.id,
-            version=repository.next_version(page.id),
+            version=await repository.next_version(page.id),
             content_markdown=markdown,
             content_hash=sha256(markdown.encode()).hexdigest(),
             created_by_id=context.principal_id,
         )
-        repository.add_version(version)
+        await repository.add_version(version)
         for item in provenance:
-            repository.add_version_source(
+            await repository.add_version_source(
                 PageVersionSource(
                     organization_id=context.organization_id,
                     page_version_id=version.id,
@@ -286,15 +291,15 @@ class KnowledgeService:
                     metadata_=item.metadata,
                 )
             )
-        repository.session.flush()
+        await repository.session.flush()
         return version
 
-    def _page_response(
+    async def _page_response(
         self, repository: KnowledgeRepository, context: AuthContext, page: Page
     ) -> PageResponse:
         shaped = [
-            self._version_response(repository, context, version)
-            for version in repository.versions(page.id)
+            await self._version_response(repository, context, version)
+            for version in await repository.versions(page.id)
         ]
         current = next(item for item in shaped if item.id == page.current_version_id)
         return PageResponse(
@@ -312,12 +317,14 @@ class KnowledgeService:
             versions=shaped,
         )
 
-    def _version_response(
+    async def _version_response(
         self, repository: KnowledgeRepository, context: AuthContext, version: PageVersion
     ) -> PageVersionResponse:
         provenance: list[ProvenanceResponse] = []
-        for link, source in repository.provenance(version.id):
-            groups = repository.policy_group_ids(context.organization_id, source.access_policy_id)
+        for link, source in await repository.provenance(version.id):
+            groups = await repository.policy_group_ids(
+                context.organization_id, source.access_policy_id
+            )
             if groups is None:
                 continue
             try:
@@ -346,16 +353,16 @@ class KnowledgeService:
             provenance=provenance,
         )
 
-    def _validate_page_references(
+    async def _validate_page_references(
         self, repository: KnowledgeRepository, context: AuthContext, request: PageCreate
     ) -> None:
-        self._require_principal(repository, context, request.steward_id)
-        self._require_policy(repository, context, request.access_policy_id)
+        await self._require_principal(repository, context, request.steward_id)
+        await self._require_policy(repository, context, request.access_policy_id)
         if request.folder_id is not None:
-            folder = repository.get_folder(context.organization_id, request.folder_id)
+            folder = await repository.get_folder(context.organization_id, request.folder_id)
             if folder is None:
                 raise InvalidKnowledgeReference("Folder was not found")
-            self._require_resource(repository, context, folder.access_policy_id)
+            await self._require_resource(repository, context, folder.access_policy_id)
 
     @staticmethod
     def _page_path(page: Page, folders: dict[UUID, Folder]) -> str:
@@ -371,46 +378,46 @@ class KnowledgeService:
             folder_id = folder.parent_id
         return "/" + "/".join(reversed(segments))
 
-    def _validate_sources(
+    async def _validate_sources(
         self,
         repository: KnowledgeRepository,
         context: AuthContext,
         provenance: list[ProvenanceInput],
     ) -> None:
         for item in provenance:
-            source = repository.get_source(context.organization_id, item.source_id)
+            source = await repository.get_source(context.organization_id, item.source_id)
             if source is None:
                 raise InvalidKnowledgeReference("Source was not found")
-            self._require_resource(repository, context, source.access_policy_id)
+            await self._require_resource(repository, context, source.access_policy_id)
 
     @staticmethod
-    def _require_context(repository: KnowledgeRepository, context: AuthContext) -> None:
-        if not repository.context_is_valid(
+    async def _require_context(repository: KnowledgeRepository, context: AuthContext) -> None:
+        if not await repository.context_is_valid(
             context.organization_id, context.principal_id, context.group_ids
         ):
             raise AuthorizationDenied("The caller's authorization context is not valid")
 
     @staticmethod
-    def _require_principal(
+    async def _require_principal(
         repository: KnowledgeRepository, context: AuthContext, principal_id: UUID
     ) -> None:
-        if not repository.principal_exists(context.organization_id, principal_id):
+        if not await repository.principal_exists(context.organization_id, principal_id):
             raise InvalidKnowledgeReference("Principal was not found")
 
     @staticmethod
-    def _require_policy(
+    async def _require_policy(
         repository: KnowledgeRepository, context: AuthContext, policy_id: UUID
     ) -> None:
-        groups = repository.policy_group_ids(context.organization_id, policy_id)
+        groups = await repository.policy_group_ids(context.organization_id, policy_id)
         if groups is None:
             raise InvalidKnowledgeReference("Access policy was not found")
         require_access(context, organization_id=context.organization_id, permitted_group_ids=groups)
 
     @staticmethod
-    def _require_resource(
+    async def _require_resource(
         repository: KnowledgeRepository, context: AuthContext, policy_id: UUID
     ) -> None:
-        groups = repository.policy_group_ids(context.organization_id, policy_id)
+        groups = await repository.policy_group_ids(context.organization_id, policy_id)
         if groups is None:
             raise KnowledgeNotFound("Resource was not found")
         require_access(context, organization_id=context.organization_id, permitted_group_ids=groups)
@@ -453,5 +460,5 @@ class KnowledgeService:
 
 def create_knowledge_service(settings: Settings) -> KnowledgeService:
     """Build the database-backed service without opening a database connection."""
-    engine = create_engine(settings)
-    return KnowledgeService(create_session_factory(engine))
+    engine = create_async_engine(settings)
+    return KnowledgeService(create_async_session_factory(engine))
