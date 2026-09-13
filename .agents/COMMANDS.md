@@ -27,6 +27,20 @@ UV_CACHE_DIR="$PWD/.uv-cache" uv run brain-api
 UV_CACHE_DIR="$PWD/.uv-cache" uv run brain-mcp
 ```
 
+Register the running local HTTP MCP endpoint with Codex while keeping the bearer token in the
+client process environment:
+
+```bash
+export BRAIN_MCP_TOKEN=brain-local-dev
+codex mcp add brain-local \
+  --url http://127.0.0.1:8000/mcp/ \
+  --bearer-token-env-var BRAIN_MCP_TOKEN
+codex mcp get brain-local
+```
+
+Open a new Codex session to discover the tools. `codex mcp remove brain-local` removes the
+host-local registration. This changes the user's Codex configuration, not repository state.
+
 After migrating a local database, the deterministic synthetic knowledge seed is:
 
 ```bash
