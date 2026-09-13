@@ -17,7 +17,9 @@ services:
       retries: 15
 
   api:
-    build: .
+    build:
+      context: .
+      target: api
     environment:
       DATABASE_URL: postgresql+psycopg://brain:brain@postgres:5432/brain
       DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-10}
@@ -44,8 +46,31 @@ services:
       timeout: 5s
       retries: 15
 
+  web:
+    build:
+      context: .
+      target: web
+    environment:
+      BRAIN_API_URL: http://api:8000
+      LOCAL_BEARER_TOKEN: ${LOCAL_BEARER_TOKEN:-brain-local-dev}
+      LOCAL_WEB_USER: ${LOCAL_WEB_USER:-brain-admin}
+      LOCAL_WEB_PASSWORD: ${LOCAL_WEB_PASSWORD:-brain-local-dev}
+      LOCAL_WEB_SESSION_SECRET: ${LOCAL_WEB_SESSION_SECRET:-brain-local-session-secret}
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/sign-in').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
   migrate:
-    build: .
+    build:
+      context: .
+      target: api
     command: ["alembic", "upgrade", "head"]
     environment:
       DATABASE_URL: postgresql+psycopg://brain:brain@postgres:5432/brain

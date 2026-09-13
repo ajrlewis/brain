@@ -9,6 +9,34 @@ permissions:
   contents: read
 
 jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.6"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: uv sync --frozen --all-packages
+      - run: npm ci
+      - run: npm run web:contracts:check
+      - run: npm run web:lint
+      - run: npm run web:typecheck
+      - run: npm run web:test
+      - run: npm run web:build
+      - run: docker compose up -d --build
+      - run: docker compose exec -T api brain-seed-northstar
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e --workspace @brain/web
+      - if: always()
+        run: docker compose down
+
   quality:
     runs-on: ubuntu-latest
     services:
@@ -51,4 +79,10 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
+          target: api
+          push: false
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: web
           push: false

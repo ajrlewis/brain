@@ -9,3 +9,7 @@ __pycache__/
 *.py[cod]
 coverage.xml
 htmlcov/
+node_modules/
+.next/
+apps/web/test-results/
+apps/web/playwright-report/

@@ -5,12 +5,44 @@ Brain is a self-hosted knowledge and capability store for AI agents.
 ## Implementation status
 
 The repository implements its persistent identity/access and first governed knowledge
-slice. PostgreSQL stores Page folders, Sources, Pages, immutable PageVersions, and
+slice plus a read-only Next.js enterprise console in `apps/web`. PostgreSQL stores Page folders, Sources, Pages, immutable PageVersions, and
 access-filtered provenance. Shared application services expose equivalent create/read
 operations through FastAPI and FastMCP, and a deterministic Northstar seed demonstrates
 versioned synthetic knowledge. It also stores validated immutable Skills, exposes bounded
 authorized inventories, and explicitly seeds five repository-owned defaults. Search, chunks,
 embeddings, document retrieval/parsing, and production identity integration remain target state.
+
+The console provides local sign-in, three-pane Page/content/provenance browsing, Skills and
+reference inventories, runtime Brain/Northstar themes, and sanitized Markdown. It calls the
+public HTTP API from Server Components, so `LOCAL_BEARER_TOKEN` is never delivered to browser
+JavaScript. FastAPI's generated OpenAPI document deterministically generates the checked-in
+Zod validators; `npm run web:contracts:check` detects drift.
+
+For local Docker use, copy `.env.example`, run `docker compose up -d --build`, and open
+`http://localhost:3000`. The disposable defaults are `brain-admin` / `brain-local-dev`.
+
+## Connect a local MCP client
+
+Brain exposes Streamable HTTP MCP at `http://127.0.0.1:8000/mcp/`. After starting the Compose
+stack, a local Codex client can register it without storing the bearer token in Codex config:
+
+```bash
+export BRAIN_MCP_TOKEN=brain-local-dev
+codex mcp add brain-local \
+  --url http://127.0.0.1:8000/mcp/ \
+  --bearer-token-env-var BRAIN_MCP_TOKEN
+codex mcp get brain-local
+```
+
+Start a new Codex session after adding the server so its tools are discovered. The token above
+is the disposable Compose default; set both `LOCAL_BEARER_TOKEN` and `BRAIN_MCP_TOKEN` to the
+same replacement value when using a non-default local environment. Keep tokens in the shell or
+an ignored environment file, never in repository or Codex configuration. Use
+`codex mcp remove brain-local` to remove the registration.
+
+The HTTP transport is recommended for authenticated local use. The standalone `brain-mcp`
+stdio command remains useful for process-level development, but governed operations currently
+authenticate from the HTTP `Authorization` header.
 
 It provides a persistent, structured place for an organisation to store:
 

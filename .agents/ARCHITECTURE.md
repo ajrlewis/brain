@@ -18,7 +18,8 @@ HTTP API ─┐
 MCP ──────┘                                  └─────> provider-neutral embeddings
 ```
 
-- `apps/api` and `apps/mcp` are thin transport boundaries over shared services.
+- `apps/api` and `apps/mcp` are thin transport boundaries over shared services. `apps/web`
+  is a read-only Next.js console over the public HTTP API and owns no domain rules.
 - `packages/core` owns typed settings plus shared health, identity, knowledge, and Skill application services.
 - `packages/schemas` owns explicit transport-neutral public request/response contracts.
 - `packages/auth` owns immutable `AuthContext`, local bearer authentication, and the initial same-tenant/any-group policy evaluator.
@@ -33,6 +34,11 @@ FastMCP exposes the `health` tool. HTTP `GET /auth/context` and MCP `auth_contex
 adapters around the same local bearer authenticator and IdentityService. The separate
 `brain-mcp` command preserves stdio, though bearer authentication is available over HTTP.
 Neither health check performs authentication or database work.
+
+The web console uses Server Components for API reads and an HTTP-only signed local session
+cookie. Backend bearer credentials remain server-only. Runtime company palettes are validated
+semantic CSS custom properties. FastAPI OpenAPI deterministically generates checked-in Zod
+validators used at the server-side transport boundary.
 
 Authenticated HTTP routes and matching MCP tools create/read Page folders and Sources,
 create Pages with extracted Markdown, append immutable PageVersions, and read Pages with
@@ -83,7 +89,16 @@ Use a provider-neutral `AuthContext` containing organization, principal, and gro
 
 ## Runtime And External Boundaries
 
-The implemented stack is Python 3.13+, uv, FastAPI, FastMCP, Pydantic v2, SQLAlchemy 2.x, Alembic, psycopg, pgvector, PostgreSQL 17 with pgvector, pytest, Ruff, Pyright, Docker, and GitHub Actions.
+The implemented stack is Python 3.13+, uv, FastAPI, FastMCP, Pydantic v2, SQLAlchemy 2.x,
+Alembic, psycopg, pgvector, PostgreSQL 17 with pgvector, pytest, Ruff, Pyright, Next.js 16,
+React 19, TypeScript, Tailwind CSS, Zod, Vitest, Testing Library, Playwright, npm workspaces,
+Docker, and GitHub Actions.
+
+Web testing is layered: Vitest covers themes, semantic rendering, Markdown sanitization, and
+the validated server-side API transport across success, deny, missing, malformed, and failure
+responses. Playwright exercises local sign-in, authorized Northstar inventory, Page detail,
+and visible provenance against the real Compose boundary. These tests consume synthetic data
+and do not replace backend authorization tests.
 
 Runtime database access uses SQLAlchemy `AsyncSession` with psycopg async. FastAPI and FastMCP
 directly await the same persistence-backed application services with one caller-owned session

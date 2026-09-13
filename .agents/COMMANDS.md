@@ -27,6 +27,20 @@ UV_CACHE_DIR="$PWD/.uv-cache" uv run brain-api
 UV_CACHE_DIR="$PWD/.uv-cache" uv run brain-mcp
 ```
 
+Register the running local HTTP MCP endpoint with Codex while keeping the bearer token in the
+client process environment:
+
+```bash
+export BRAIN_MCP_TOKEN=brain-local-dev
+codex mcp add brain-local \
+  --url http://127.0.0.1:8000/mcp/ \
+  --bearer-token-env-var BRAIN_MCP_TOKEN
+codex mcp get brain-local
+```
+
+Open a new Codex session to discover the tools. `codex mcp remove brain-local` removes the
+host-local registration. This changes the user's Codex configuration, not repository state.
+
 After migrating a local database, the deterministic synthetic knowledge seed is:
 
 ```bash
@@ -89,6 +103,34 @@ The event-loop probe progressed throughout. Separate pool size 2 checks used 50 
 acquisition and statement timeouts and returned controlled exceptions. These local synthetic
 measurements verify bounded concurrency behavior; they are not a production capacity or
 400-concurrent-user claim.
+
+## Web console
+
+```bash
+npm install
+npm run web:contracts:check
+npm run web:lint
+npm run web:typecheck
+npm run web:test
+npm run web:build
+npm run test:e2e --workspace @brain/web
+```
+
+`web:test` runs Vitest unit/component and mocked server-transport tests. The Playwright browser
+integration expects a running, migrated, Northstar-seeded Compose stack. Prepare it with:
+
+```bash
+docker compose up -d --build
+docker compose exec -T api brain-seed-northstar
+npx playwright install chromium
+npm run test:e2e --workspace @brain/web
+```
+
+Contract generation,
+lint, type checking, and 11 unit/component tests were verified on 2026-09-13. Production
+compilation, type checking, route generation, and optimization completed in Docker; a later
+repeat encountered a native Node/Docker Desktop crash while packaging, so Compose health and
+the browser flow were not recorded as verified in this environment.
 
 ## PostgreSQL And Docker
 

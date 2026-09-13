@@ -1,7 +1,7 @@
 # Workflow
 
 `README.md` is Brain's target-state product specification. `.agents/ARCHITECTURE.md`
-records the implemented identity/access, governed knowledge, and Skill persistence slices;
+records the implemented identity/access, governed knowledge, Skill persistence, and web console slices;
 do not describe later search components as implemented or proposed commands as verified.
 
 ## Change Loop
@@ -12,6 +12,22 @@ do not describe later search components as implemented or proposed commands as v
 4. Run the relevant verified commands from `.agents/COMMANDS.md`.
 5. Review the diff for scope, secrets, generated files, migrations, and documentation accuracy.
 6. Update agent context only when durable project facts change. Record persistent out-of-scope setup work in `.agents/todos/TODO.md` and archive completed entries in `DONE.md`.
+
+## Python And TypeScript Changes
+
+- Python applications and packages use uv, Ruff, Pyright, and pytest. Keep unit/e2e tests in
+  `tests/` and dependency-backed PostgreSQL behavior behind the `integration` marker.
+- The TypeScript application is the npm workspace at `apps/web`. Use ESLint, TypeScript's
+  no-emit check, Vitest with Testing Library for components and server transport behavior,
+  and Playwright for browser integration with the real Compose API and Northstar seed.
+- FastAPI schemas are authoritative. Regenerate `apps/web/openapi.json` and the generated Zod
+  validators after public API changes; never hand-edit generated contracts. The drift check
+  must pass in CI.
+- Keep backend tokens and local credential validation in server-only modules. Client
+  Components are limited to browser interaction and must not import server configuration.
+- Run checks for every language affected by a change. Cross-stack contracts, Docker, Compose,
+  or browser behavior require both Python and TypeScript checks plus the relevant integration
+  flow.
 
 ## Git
 

@@ -1,0 +1,21 @@
+{
+  "name": "brain",
+  "private": true,
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "web:dev": "npm run dev --workspace @brain/web",
+    "web:lint": "npm run lint --workspace @brain/web",
+    "web:typecheck": "npm run typecheck --workspace @brain/web",
+    "web:test": "npm run test --workspace @brain/web",
+    "web:build": "npm run build --workspace @brain/web",
+    "web:contracts": "npm run contracts --workspace @brain/web",
+    "web:contracts:check": "npm run contracts:check --workspace @brain/web"
+  },
+  "allowScripts": {
+    "@tailwindcss/oxide@4.1.13": true,
+    "esbuild@0.28.2": true,
+    "unrs-resolver@1.12.2": true
+  }
+}
