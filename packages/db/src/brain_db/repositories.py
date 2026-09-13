@@ -1,11 +1,12 @@
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from brain_db.models import (
     AccessPolicy,
     AccessPolicyGroup,
+    Chunk,
     Folder,
     Group,
     GroupMembership,
@@ -182,6 +183,11 @@ class KnowledgeRepository(Repository):
 
     async def add_version(self, version: PageVersion) -> None:
         self.session.add(version)
+        await self.session.flush()
+
+    async def replace_chunks(self, page_version_id: UUID, chunks: list[Chunk]) -> None:
+        await self.session.execute(delete(Chunk).where(Chunk.page_version_id == page_version_id))
+        self.session.add_all(chunks)
         await self.session.flush()
 
     async def add_version_source(self, link: PageVersionSource) -> None:

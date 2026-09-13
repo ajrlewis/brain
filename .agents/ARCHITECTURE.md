@@ -3,8 +3,7 @@
 `README.md` is the canonical target-state specification. The implemented system is a Python
 3.13 uv workspace with HTTP and MCP interfaces over shared application services, a
 provider-neutral authorization context, and PostgreSQL identity/access plus governed
-knowledge and Skill persistence managed by Alembic. Search remains target state unless
-explicitly identified below.
+knowledge and Skill persistence plus authorization-safe hybrid Page search managed by Alembic.
 
 ## Purpose And Boundary
 
@@ -24,7 +23,9 @@ MCP ──────┘                                  └─────> p
 - `packages/schemas` owns explicit transport-neutral public request/response contracts.
 - `packages/auth` owns immutable `AuthContext`, local bearer authentication, and the initial same-tenant/any-group policy evaluator.
 - `packages/db` owns declarative metadata, identity/access, knowledge, and Skill models, engine/session factories, caller-owned repositories, Alembic, and explicit idempotent seeds.
-- `packages/ai` and `packages/search` remain installable boundaries with implementations deferred.
+- `packages/ai` owns the provider-neutral embedding protocol and deterministic synthetic local
+  implementation. `packages/search` owns deterministic Markdown chunking and PostgreSQL
+  full-text/pgvector retrieval without exposing database details to transports.
 
 Applications may depend on packages; packages must not depend on applications. HTTP and MCP must not independently implement domain rules.
 
@@ -34,6 +35,11 @@ FastMCP exposes the `health` tool. HTTP `GET /auth/context` and MCP `auth_contex
 adapters around the same local bearer authenticator and IdentityService. The separate
 `brain-mcp` command preserves stdio, though bearer authentication is available over HTTP.
 Neither health check performs authentication or database work.
+
+HTTP `POST /search` and MCP `search` are thin adapters over `SearchService`. The service
+validates the authorization context and shapes bounded typed results; the search repository
+filters organization, current PageVersion, deletion, and access policy inside a materialized
+candidate relation before lexical or semantic ranking and limiting.
 
 The web console uses Server Components for API reads and an HTTP-only signed local session
 cookie. Backend bearer credentials remain server-only. Runtime company palettes are validated
@@ -55,7 +61,8 @@ The initial migration creates Organization, Principal, Group, GroupMembership,
 AccessPolicy, and AccessPolicyGroup. Composite tenant foreign keys prevent cross-tenant
 links. The second migration adds Page folders, Sources, Pages, immutable PageVersions,
 and retained PageVersionSource provenance. The third adds Skills and immutable
-SkillVersions. Both parent/version pairs enforce same-tenant/current-version constraints.
+SkillVersions. The fourth adds regenerable PageVersion Chunks with GIN full-text and HNSW
+cosine-vector indexes. Both parent/version pairs enforce same-tenant/current-version constraints.
 The application process never migrates implicitly: Compose orders PostgreSQL
 health, one-shot migration completion, then API startup.
 
@@ -97,7 +104,7 @@ Docker, and GitHub Actions.
 Web testing is layered: Vitest covers themes, semantic rendering, Markdown sanitization, and
 the validated server-side API transport across success, deny, missing, malformed, and failure
 responses. Playwright exercises local sign-in, authorized Northstar inventory, Page detail,
-and visible provenance against the real Compose boundary. These tests consume synthetic data
+visible provenance, and hybrid search against the real Compose boundary. These tests consume synthetic data
 and do not replace backend authorization tests.
 
 Runtime database access uses SQLAlchemy `AsyncSession` with psycopg async. FastAPI and FastMCP

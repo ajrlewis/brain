@@ -16,6 +16,7 @@ from brain_core import (
     KnowledgeConflict,
     KnowledgeNotFound,
     KnowledgeService,
+    SearchService,
     Settings,
     SkillConflict,
     SkillNotFound,
@@ -24,6 +25,7 @@ from brain_core import (
     create_knowledge_service,
     create_local_authenticator,
     create_persistence_services,
+    create_search_service,
     create_skill_service,
 )
 from brain_core.settings import get_settings
@@ -38,6 +40,8 @@ from brain_schemas import (
     PageInventoryItem,
     PageResponse,
     PageVersionCreate,
+    SearchRequest,
+    SearchResponse,
     SkillCreate,
     SkillInventoryItem,
     SkillResponse,
@@ -59,6 +63,7 @@ def create_app(
     identity_service: IdentityService | None = None,
     knowledge_service: KnowledgeService | None = None,
     skill_service: SkillService | None = None,
+    search_service: SearchService | None = None,
     authenticator: LocalBearerAuthenticator | None = None,
     mcp_server: FastMCP | None = None,
 ) -> FastAPI:
@@ -68,15 +73,18 @@ def create_app(
         settings=resolved_settings,
     )
     resolved_identity_service = identity_service or IdentityService()
-    if knowledge_service is None and skill_service is None:
-        resolved_knowledge_service, resolved_skill_service = create_persistence_services(
-            resolved_settings
-        )
+    if knowledge_service is None and skill_service is None and search_service is None:
+        (
+            resolved_knowledge_service,
+            resolved_skill_service,
+            resolved_search_service,
+        ) = create_persistence_services(resolved_settings)
     else:
         resolved_knowledge_service = knowledge_service or create_knowledge_service(
             resolved_settings
         )
         resolved_skill_service = skill_service or create_skill_service(resolved_settings)
+        resolved_search_service = search_service or create_search_service(resolved_settings)
     resolved_authenticator = authenticator or create_local_authenticator(resolved_settings)
     resolved_mcp_server = mcp_server or create_server(
         settings=resolved_settings,
@@ -84,6 +92,7 @@ def create_app(
         identity_service=resolved_identity_service,
         knowledge_service=resolved_knowledge_service,
         skill_service=resolved_skill_service,
+        search_service=resolved_search_service,
         authenticator=resolved_authenticator,
     )
     mcp_app = resolved_mcp_server.http_app(path="/")
@@ -96,6 +105,7 @@ def create_app(
     app.state.identity_service = resolved_identity_service
     app.state.knowledge_service = resolved_knowledge_service
     app.state.skill_service = resolved_skill_service
+    app.state.search_service = resolved_search_service
     app.state.authenticator = resolved_authenticator
     app.state.mcp_server = resolved_mcp_server
 
@@ -230,6 +240,13 @@ def create_app(
         return await call_knowledge(
             resolved_skill_service.create_skill_version, context, skill_id, request
         )
+
+    @app.post("/search", response_model=SearchResponse, tags=["search"])
+    async def search(
+        request: SearchRequest,
+        context: Annotated[AuthContext, Depends(get_auth_context)],
+    ) -> SearchResponse:
+        return await call_knowledge(resolved_search_service.search, context, request)
 
     app.mount("/mcp", mcp_app, name="mcp")
 

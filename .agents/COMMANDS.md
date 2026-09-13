@@ -9,7 +9,7 @@ safe to use elsewhere.
 
 ## Workspace
 
-Verified on 2026-09-13:
+Verified on 2026-09-14:
 
 ```bash
 UV_CACHE_DIR="$PWD/.uv-cache" uv lock
@@ -50,7 +50,7 @@ DATABASE_URL=postgresql+psycopg://brain:brain@localhost:5432/brain \
 
 The command reads `examples/northstar/seed/manifest.yaml` plus its referenced UTF-8
 documents. It performs no downloads and can be rerun without duplicating identities,
-versions, or provenance.
+versions, provenance, or deterministic derived chunks.
 
 Seed the repository-owned default Skill bundle explicitly after resolving deployment
 identities (these selectors match Northstar):
@@ -70,7 +70,7 @@ and supporting references are included in the `brain-db` wheel and Docker build.
 
 ## Quality
 
-Verified on 2026-09-13:
+Verified on 2026-09-14:
 
 ```bash
 UV_CACHE_DIR="$PWD/.uv-cache" uv run ruff check .
@@ -79,7 +79,7 @@ UV_CACHE_DIR="$PWD/.uv-cache" uv run pyright
 UV_CACHE_DIR="$PWD/.uv-cache" uv run pytest -m 'not integration' --cov --cov-report=term-missing
 ```
 
-The last command ran 50 tests with 90%+ branch-aware coverage. The dependency-backed
+The last command ran 58 tests with 90%+ branch-aware coverage. The dependency-backed
 integration suite is intentionally separate and includes PostgreSQL stale-writer races,
 timeout behavior, and a 100-request HTTP/MCP concurrency exercise with a five-connection pool:
 
@@ -88,7 +88,8 @@ TEST_DATABASE_URL=postgresql://brain:brain@localhost:5432/brain \
   UV_CACHE_DIR="$PWD/.uv-cache" uv run pytest -m integration
 ```
 
-The suite ran 9 PostgreSQL tests on 2026-09-13.
+The suite ran 10 PostgreSQL tests on 2026-09-14, including hybrid-search authorization,
+current-version, clean-migration, and HTTP/MCP parity coverage.
 
 The concurrency test reports elapsed time, throughput, and p50/p95 request latency without
 asserting machine-specific performance thresholds. It does assert authorization/correctness,
@@ -126,15 +127,14 @@ npx playwright install chromium
 npm run test:e2e --workspace @brain/web
 ```
 
-Contract generation,
-lint, type checking, and 11 unit/component tests were verified on 2026-09-13. Production
-compilation, type checking, route generation, and optimization completed in Docker; a later
-repeat encountered a native Node/Docker Desktop crash while packaging, so Compose health and
-the browser flow were not recorded as verified in this environment.
+Contract generation, lint, type checking, 19 unit/component tests, production builds,
+Compose health, Northstar seeding, and the Playwright Page/provenance/search flow were verified
+on 2026-09-14. Docker Desktop's BuildKit path transiently corrupted a bytecode input during one
+build; the documented `DOCKER_BUILDKIT=0 docker compose build` fallback completed successfully.
 
 ## PostgreSQL And Docker
 
-The Compose model and application image build were verified on 2026-09-13:
+The Compose model and application image build were verified on 2026-09-14:
 
 ```bash
 docker compose config

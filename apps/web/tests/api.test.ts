@@ -6,7 +6,7 @@ vi.mock("@/lib/env", () => ({
     LOCAL_BEARER_TOKEN: "server-secret",
   }),
 }));
-import { ApiError, getPages } from "@/lib/api";
+import { ApiError, getPages, searchPages } from "@/lib/api";
 const page = {
   id: "10000000-0000-0000-0000-000000000001",
   slug: "hello",
@@ -54,5 +54,23 @@ describe("API transport", () => {
   it("maps connection failures", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
     await expect(getPages()).rejects.toMatchObject({ status: 503 });
+  });
+  it("posts search through the validated server-only transport", async () => {
+    const payload = { query: "alpha", results: [] };
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(payload)));
+    vi.stubGlobal("fetch", fetcher);
+
+    await expect(searchPages("alpha")).resolves.toEqual(payload);
+    expect(fetcher).toHaveBeenCalledWith(
+      "http://api.test/search",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ query: "alpha", limit: 20 }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer server-secret",
+        },
+      }),
+    );
   });
 });

@@ -80,6 +80,11 @@ Filtering after ranking or limiting is incorrect because it leaks relevance and 
 incomplete results. Queries must not expose unauthorized data through titles, snippets,
 facets, counts, timing-specific branches, error differences, logs, or provenance.
 
+The implemented hybrid query materializes only same-tenant, live Pages whose joined
+PageVersion is current and whose policy is organization-wide or intersects the caller's
+validated groups. PostgreSQL full-text and pgvector candidate queries both read that
+authorized relation, then combine lexical and semantic scores with deterministic tie-breaking.
+
 ## Mutations and deletion
 
 Create and update services validate that all referenced records share the caller's

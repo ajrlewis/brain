@@ -2,6 +2,7 @@ from brain_db.base import NAMING_CONVENTION, Base
 from brain_db.models import (
     AccessPolicy,
     AccessPolicyGroup,
+    Chunk,
     Folder,
     Group,
     GroupMembership,
@@ -33,6 +34,7 @@ __all__ = [
     "AccessPolicyGroup",
     "AsyncSessionFactory",
     "Base",
+    "Chunk",
     "Folder",
     "Group",
     "GroupMembership",

@@ -4,6 +4,8 @@ version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
   "alembic>=1.16,<2",
+  "brain-ai",
+  "brain-search",
   "brain-schemas",
   "psycopg[binary]>=3.2,<4",
   "sqlalchemy>=2.0,<3",
@@ -12,6 +14,8 @@ dependencies = [
 
 [tool.uv.sources]
 brain-schemas = { workspace = true }
+brain-ai = { workspace = true }
+brain-search = { workspace = true }
 
 [project.scripts]
 brain-seed-northstar = "brain_db.seed:run"

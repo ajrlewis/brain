@@ -1,7 +1,7 @@
 # Data Model
 
 This document is the contract for Brain's initial identity, access, knowledge, and Skill
-model. The migrations implement the identity/access, knowledge, and Skill tables identified
+model. The migrations implement the identity/access, knowledge, Skill, and derived retrieval tables identified
 below.
 
 PostgreSQL UUID primary keys are stable public identifiers. Timestamps are timezone-aware.
@@ -152,11 +152,17 @@ Skills, and immutable SkillVersions are canonical. Only PageVersion and SkillVer
 store their respective Markdown content.
 
 Chunks, full-text indexes, and embeddings are derived exclusively from PageVersion
-content. Every Chunk identifies its PageVersion, ordinal position, text, heading path,
-token count, and content hash. Every embedding records provider, model, dimensions, and
-the Chunk it represents. Derived rows have no independent policy or stewardship and may
+content. Every Chunk identifies its organization and PageVersion, zero-based position,
+text, JSON heading path, SHA-256 content hash, and eight-dimensional provider-neutral
+embedding. Derived rows have no independent policy or stewardship and may
 be deleted and rebuilt without changing canonical records or current-version pointers.
 Authorization is inherited from the owning Page at query time.
+
+Markdown chunking is deterministic: line endings are normalized, headings start sections,
+heading ancestry is retained, and paragraph groups are bounded at 1,200 characters where
+possible. Regeneration replaces all chunks for exactly one immutable PageVersion with stable
+content-derived identifiers. The local and test embedding implementation is deterministic and
+requires no external provider; production provider selection remains deferred.
 
 ## Repository fixture boundaries
 

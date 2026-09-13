@@ -117,6 +117,47 @@ select {
   padding: 0.45rem 0.65rem;
   border-radius: 0.45rem;
 }
+.search-form label {
+  display: block;
+  margin-bottom: 0.65rem;
+  font-weight: 750;
+}
+.search-form div {
+  display: flex;
+  gap: 0.65rem;
+}
+.search-form input {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0.75rem 0.9rem;
+}
+.search-form button {
+  border: 0;
+  border-radius: 0.5rem;
+  background: var(--primary);
+  color: white;
+  padding: 0.75rem 1.1rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+.search-results {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+.search-result h2 {
+  margin: 0.25rem 0 0.5rem;
+}
+.search-result small {
+  color: var(--text-muted);
+}
+.search-loading {
+  color: var(--text-muted);
+}
 .shell {
   display: grid;
   grid-template-columns: 14rem minmax(0, 1fr);

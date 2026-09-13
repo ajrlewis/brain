@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   PageInventoryItem,
   PageResponse,
+  SearchResponse,
   SkillInventoryItem,
   SourceInventoryItem,
 } from "./generated/api";
@@ -16,12 +17,20 @@ export class ApiError extends Error {
     super(message);
   }
 }
-async function request<T>(path: string, schema: z.ZodType<T>): Promise<T> {
+async function request<T>(
+  path: string,
+  schema: z.ZodType<T>,
+  init: RequestInit = {},
+): Promise<T> {
   const config = env();
   let response: Response;
   try {
     response = await fetch(`${config.BRAIN_API_URL}${path}`, {
-      headers: { Authorization: `Bearer ${config.LOCAL_BEARER_TOKEN}` },
+      ...init,
+      headers: {
+        ...init.headers,
+        Authorization: `Bearer ${config.LOCAL_BEARER_TOKEN}`,
+      },
       cache: "no-store",
     });
   } catch {
@@ -49,3 +58,10 @@ export const getPage = (id: string) =>
 export const getSkills = () => request("/skills", z.array(SkillInventoryItem));
 export const getSources = () =>
   request("/sources", z.array(SourceInventoryItem));
+export type SearchResults = z.infer<typeof SearchResponse>;
+export const searchPages = (query: string) =>
+  request("/search", SearchResponse, {
+    method: "POST",
+    body: JSON.stringify({ query, limit: 20 }),
+    headers: { "Content-Type": "application/json" },
+  });
