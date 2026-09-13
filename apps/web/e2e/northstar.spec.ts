@@ -11,6 +11,8 @@ test("signs in and browses Northstar inventory and detail", async ({
   await expect(first).toBeVisible();
   const title = await first.textContent();
   await first.click();
-  await expect(page.getByRole("heading", { name: title ?? "" })).toBeVisible();
+  await expect(
+    page.locator(".title-row").getByRole("heading", { name: title ?? "" }),
+  ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Provenance" })).toBeVisible();
 });
