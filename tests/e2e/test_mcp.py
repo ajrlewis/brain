@@ -1,3 +1,5 @@
+import asyncio
+from threading import Barrier, get_ident
 from uuid import UUID
 
 import httpx
@@ -9,6 +11,7 @@ from brain_api import create_app
 from brain_auth import AuthContext, LocalBearerAuthenticator
 from brain_core import HealthService, Settings
 from brain_mcp import create_server
+from brain_mcp.server import call_knowledge_async
 from brain_schemas import HealthResponse
 
 
@@ -20,6 +23,24 @@ class RecordingHealthService(HealthService):
     def check(self) -> HealthResponse:
         self.calls += 1
         return super().check()
+
+
+async def test_sync_service_calls_are_offloaded_concurrently() -> None:
+    barrier = Barrier(2)
+    event_loop_thread = get_ident()
+
+    def blocking_call(value: int) -> tuple[int, int]:
+        barrier.wait(timeout=2)
+        return value, get_ident()
+
+    results = await asyncio.gather(
+        call_knowledge_async(blocking_call, 1),
+        call_knowledge_async(blocking_call, 2),
+    )
+
+    assert [value for value, _ in results] == [1, 2]
+    assert all(thread_id != event_loop_thread for _, thread_id in results)
+    assert len({thread_id for _, thread_id in results}) == 2
 
 
 async def test_mcp_health_uses_injected_shared_service() -> None:

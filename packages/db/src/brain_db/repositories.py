@@ -13,6 +13,8 @@ from brain_db.models import (
     PageVersion,
     PageVersionSource,
     Principal,
+    Skill,
+    SkillVersion,
     Source,
 )
 
@@ -93,6 +95,16 @@ class KnowledgeRepository(Repository):
             )
         )
 
+    def folders(self, organization_id: UUID) -> list[Folder]:
+        return list(
+            self.session.scalars(
+                select(Folder).where(
+                    Folder.organization_id == organization_id,
+                    Folder.deleted_at.is_(None),
+                )
+            )
+        )
+
     def add_folder(self, folder: Folder) -> None:
         self.session.add(folder)
         self.session.flush()
@@ -110,6 +122,18 @@ class KnowledgeRepository(Repository):
         self.session.add(source)
         self.session.flush()
 
+    def source_inventory(self, organization_id: UUID) -> list[Source]:
+        return list(
+            self.session.scalars(
+                select(Source)
+                .where(
+                    Source.organization_id == organization_id,
+                    Source.deleted_at.is_(None),
+                )
+                .order_by(Source.title, Source.id)
+            )
+        )
+
     def get_page(self, organization_id: UUID, page_id: UUID, *, lock: bool = False) -> Page | None:
         query = select(Page).where(
             Page.id == page_id,
@@ -121,6 +145,35 @@ class KnowledgeRepository(Repository):
     def add_page(self, page: Page) -> None:
         self.session.add(page)
         self.session.flush()
+
+    def pages(self, organization_id: UUID) -> list[Page]:
+        return list(
+            self.session.scalars(
+                select(Page)
+                .where(
+                    Page.organization_id == organization_id,
+                    Page.deleted_at.is_(None),
+                    Page.current_version_id.is_not(None),
+                )
+                .order_by(Page.position, Page.slug)
+            )
+        )
+
+    def page_inventory(self, organization_id: UUID) -> list[tuple[Page, UUID, str]]:
+        return list(
+            self.session.execute(
+                select(Page, PageVersion.id, PageVersion.content_hash)
+                .join(
+                    PageVersion,
+                    (PageVersion.page_id == Page.id) & (PageVersion.id == Page.current_version_id),
+                )
+                .where(
+                    Page.organization_id == organization_id,
+                    Page.deleted_at.is_(None),
+                )
+                .order_by(Page.position, Page.slug)
+            ).tuples()
+        )
 
     def add_version(self, version: PageVersion) -> None:
         self.session.add(version)
@@ -164,3 +217,83 @@ class KnowledgeRepository(Repository):
                 .order_by(Source.id, PageVersionSource.relationship)
             ).tuples()
         )
+
+
+class SkillRepository(KnowledgeRepository):
+    """Persistence operations for a caller-owned Skill unit of work."""
+
+    def get_skill(
+        self, organization_id: UUID, skill_id: UUID, *, lock: bool = False
+    ) -> Skill | None:
+        query = select(Skill).where(
+            Skill.id == skill_id,
+            Skill.organization_id == organization_id,
+            Skill.deleted_at.is_(None),
+        )
+        return self.session.scalar(query.with_for_update() if lock else query)
+
+    def get_skill_by_slug(self, organization_id: UUID, slug: str) -> Skill | None:
+        return self.session.scalar(
+            select(Skill).where(
+                Skill.organization_id == organization_id,
+                Skill.slug == slug,
+                Skill.deleted_at.is_(None),
+            )
+        )
+
+    def skills(self, organization_id: UUID) -> list[Skill]:
+        return list(
+            self.session.scalars(
+                select(Skill)
+                .where(
+                    Skill.organization_id == organization_id,
+                    Skill.deleted_at.is_(None),
+                    Skill.current_version_id.is_not(None),
+                )
+                .order_by(Skill.position, Skill.slug)
+            )
+        )
+
+    def skill_inventory(self, organization_id: UUID) -> list[tuple[Skill, UUID, str]]:
+        return list(
+            self.session.execute(
+                select(Skill, SkillVersion.id, SkillVersion.content_hash)
+                .join(
+                    SkillVersion,
+                    (SkillVersion.skill_id == Skill.id)
+                    & (SkillVersion.id == Skill.current_version_id),
+                )
+                .where(
+                    Skill.organization_id == organization_id,
+                    Skill.deleted_at.is_(None),
+                )
+                .order_by(Skill.position, Skill.slug)
+            ).tuples()
+        )
+
+    def add_skill(self, skill: Skill) -> None:
+        self.session.add(skill)
+        self.session.flush()
+
+    def add_skill_version(self, version: SkillVersion) -> None:
+        self.session.add(version)
+        self.session.flush()
+
+    def skill_versions(self, skill_id: UUID) -> list[SkillVersion]:
+        return list(
+            self.session.scalars(
+                select(SkillVersion)
+                .where(SkillVersion.skill_id == skill_id)
+                .order_by(SkillVersion.version)
+            )
+        )
+
+    def next_skill_version(self, skill_id: UUID) -> int:
+        return (
+            self.session.scalar(
+                select(func.coalesce(func.max(SkillVersion.version), 0)).where(
+                    SkillVersion.skill_id == skill_id
+                )
+            )
+            or 0
+        ) + 1

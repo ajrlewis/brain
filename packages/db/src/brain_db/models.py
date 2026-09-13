@@ -374,3 +374,92 @@ class PageVersionSource(Base):
     metadata_: Mapped[dict[str, object]] = mapped_column(
         "metadata", JSONB, nullable=False, default=dict
     )
+
+
+class Skill(TimestampMixin, Base):
+    __tablename__ = "skills"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "id"),
+        UniqueConstraint("organization_id", "slug"),
+        CheckConstraint("slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'", name="slug_format"),
+        CheckConstraint("length(btrim(name)) > 0", name="name_not_blank"),
+        ForeignKeyConstraint(
+            ["organization_id", "folder_id"],
+            ["folders.organization_id", "folders.id"],
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "access_policy_id"],
+            ["access_policies.organization_id", "access_policies.id"],
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "steward_id"],
+            ["principals.organization_id", "principals.id"],
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "created_by_id"],
+            ["principals.organization_id", "principals.id"],
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "updated_by_id"],
+            ["principals.organization_id", "principals.id"],
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["current_version_id", "id"],
+            ["skill_versions.id", "skill_versions.skill_id"],
+            use_alter=True,
+            ondelete="RESTRICT",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4)
+    organization_id: Mapped[UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False
+    )
+    folder_id: Mapped[UUID | None] = mapped_column(PostgreSQLUUID(as_uuid=True))
+    slug: Mapped[str] = mapped_column(String(63), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    current_version_id: Mapped[UUID | None] = mapped_column(PostgreSQLUUID(as_uuid=True))
+    access_policy_id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    steward_id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), nullable=False)
+    created_by_id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), nullable=False)
+    updated_by_id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), nullable=False)
+
+
+class SkillVersion(Base):
+    __tablename__ = "skill_versions"
+    __table_args__ = (
+        UniqueConstraint("id", "skill_id"),
+        UniqueConstraint("organization_id", "id"),
+        UniqueConstraint("skill_id", "version"),
+        UniqueConstraint("skill_id", "content_hash"),
+        CheckConstraint("version > 0", name="version_positive"),
+        CheckConstraint("length(btrim(content_markdown)) > 0", name="content_not_blank"),
+        CheckConstraint("content_hash ~ '^[0-9a-f]{64}$'", name="content_hash_sha256"),
+        ForeignKeyConstraint(
+            ["organization_id", "skill_id"],
+            ["skills.organization_id", "skills.id"],
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "created_by_id"],
+            ["principals.organization_id", "principals.id"],
+            ondelete="RESTRICT",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4)
+    organization_id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), nullable=False)
+    skill_id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_markdown: Mapped[str] = mapped_column(Text, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_by_id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

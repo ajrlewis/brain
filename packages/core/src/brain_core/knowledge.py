@@ -21,12 +21,14 @@ from brain_schemas import (
     FolderCreate,
     FolderResponse,
     PageCreate,
+    PageInventoryItem,
     PageResponse,
     PageVersionCreate,
     PageVersionResponse,
     ProvenanceInput,
     ProvenanceResponse,
     SourceCreate,
+    SourceInventoryItem,
     SourceResponse,
 )
 
@@ -41,6 +43,10 @@ class DuplicatePageContent(Exception):
 
 class KnowledgeConflict(Exception):
     """Raised when knowledge violates a uniqueness or structural constraint."""
+
+
+class VersionConflict(KnowledgeConflict):
+    """Raised when a mutation was prepared against a stale current version."""
 
 
 class InvalidKnowledgeReference(Exception):
@@ -129,6 +135,28 @@ class KnowledgeService:
             self._require_resource(repository, context, source.access_policy_id)
             return self._source_response(source)
 
+    def list_sources(self, context: AuthContext) -> list[SourceInventoryItem]:
+        with session_scope(self.session_factory) as session:
+            repository = KnowledgeRepository(session)
+            self._require_context(repository, context)
+            result: list[SourceInventoryItem] = []
+            for source in repository.source_inventory(context.organization_id):
+                try:
+                    self._require_resource(repository, context, source.access_policy_id)
+                except AuthorizationDenied:
+                    continue
+                result.append(
+                    SourceInventoryItem(
+                        id=source.id,
+                        title=source.title,
+                        source_type=source.source_type,
+                        status=source.status,
+                        canonical_uri=source.canonical_uri,
+                        updated_at=source.updated_at,
+                    )
+                )
+            return result
+
     def create_page(self, context: AuthContext, request: PageCreate) -> PageResponse:
         with session_scope(self.session_factory) as session:
             repository = KnowledgeRepository(session)
@@ -170,6 +198,8 @@ class KnowledgeService:
             if page is None:
                 raise KnowledgeNotFound("Page was not found")
             self._require_resource(repository, context, page.access_policy_id)
+            if page.current_version_id != request.expected_current_version_id:
+                raise VersionConflict("The Page current version has changed")
             self._validate_sources(repository, context, request.sources)
             content_hash = sha256(request.content_markdown.encode()).hexdigest()
             if any(
@@ -196,6 +226,38 @@ class KnowledgeService:
                 raise KnowledgeNotFound("Page was not found")
             self._require_resource(repository, context, page.access_policy_id)
             return self._page_response(repository, context, page)
+
+    def list_pages(self, context: AuthContext) -> list[PageInventoryItem]:
+        with session_scope(self.session_factory) as session:
+            repository = KnowledgeRepository(session)
+            self._require_context(repository, context)
+            folders = {folder.id: folder for folder in repository.folders(context.organization_id)}
+            inventory: list[PageInventoryItem] = []
+            for page, current_version_id, content_hash in repository.page_inventory(
+                context.organization_id
+            ):
+                try:
+                    self._require_resource(repository, context, page.access_policy_id)
+                except AuthorizationDenied:
+                    continue
+                inventory.append(
+                    PageInventoryItem(
+                        id=page.id,
+                        slug=page.slug,
+                        title=page.title,
+                        path=self._page_path(page, folders),
+                        current_version_id=current_version_id,
+                        content_hash=content_hash,
+                    )
+                )
+            return sorted(inventory, key=lambda item: item.path)
+
+    def get_page_by_path(self, context: AuthContext, path: str) -> PageResponse:
+        normalized = "/" + path.strip("/")
+        match = next((item for item in self.list_pages(context) if item.path == normalized), None)
+        if match is None:
+            raise KnowledgeNotFound("Page was not found")
+        return self.get_page(context, match.id)
 
     def _insert_version(
         self,
@@ -294,6 +356,20 @@ class KnowledgeService:
             if folder is None:
                 raise InvalidKnowledgeReference("Folder was not found")
             self._require_resource(repository, context, folder.access_policy_id)
+
+    @staticmethod
+    def _page_path(page: Page, folders: dict[UUID, Folder]) -> str:
+        segments = [page.slug]
+        folder_id = page.folder_id
+        visited: set[UUID] = set()
+        while folder_id is not None:
+            if folder_id in visited or folder_id not in folders:
+                raise KnowledgeConflict("Page folder path is invalid")
+            visited.add(folder_id)
+            folder = folders[folder_id]
+            segments.append(folder.slug)
+            folder_id = folder.parent_id
+        return "/" + "/".join(reversed(segments))
 
     def _validate_sources(
         self,

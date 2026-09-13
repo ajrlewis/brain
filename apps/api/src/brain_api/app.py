@@ -16,8 +16,13 @@ from brain_core import (
     KnowledgeNotFound,
     KnowledgeService,
     Settings,
+    SkillConflict,
+    SkillNotFound,
+    SkillService,
+    VersionConflict,
     create_knowledge_service,
     create_local_authenticator,
+    create_skill_service,
 )
 from brain_core.settings import get_settings
 from brain_mcp import create_server
@@ -26,10 +31,17 @@ from brain_schemas import (
     FolderCreate,
     FolderResponse,
     HealthResponse,
+    InvalidSkillDocument,
     PageCreate,
+    PageInventoryItem,
     PageResponse,
     PageVersionCreate,
+    SkillCreate,
+    SkillInventoryItem,
+    SkillResponse,
+    SkillVersionCreate,
     SourceCreate,
+    SourceInventoryItem,
     SourceResponse,
 )
 
@@ -44,6 +56,7 @@ def create_app(
     health_service: HealthService | None = None,
     identity_service: IdentityService | None = None,
     knowledge_service: KnowledgeService | None = None,
+    skill_service: SkillService | None = None,
     authenticator: LocalBearerAuthenticator | None = None,
     mcp_server: FastMCP | None = None,
 ) -> FastAPI:
@@ -54,12 +67,14 @@ def create_app(
     )
     resolved_identity_service = identity_service or IdentityService()
     resolved_knowledge_service = knowledge_service or create_knowledge_service(resolved_settings)
+    resolved_skill_service = skill_service or create_skill_service(resolved_settings)
     resolved_authenticator = authenticator or create_local_authenticator(resolved_settings)
     resolved_mcp_server = mcp_server or create_server(
         settings=resolved_settings,
         health_service=resolved_health_service,
         identity_service=resolved_identity_service,
         knowledge_service=resolved_knowledge_service,
+        skill_service=resolved_skill_service,
         authenticator=resolved_authenticator,
     )
     mcp_app = resolved_mcp_server.http_app(path="/")
@@ -71,6 +86,7 @@ def create_app(
     app.state.health_service = resolved_health_service
     app.state.identity_service = resolved_identity_service
     app.state.knowledge_service = resolved_knowledge_service
+    app.state.skill_service = resolved_skill_service
     app.state.authenticator = resolved_authenticator
     app.state.mcp_server = resolved_mcp_server
 
@@ -114,12 +130,31 @@ def create_app(
     ) -> SourceResponse:
         return call_knowledge(resolved_knowledge_service.get_source, context, source_id)
 
+    @app.get("/sources", response_model=list[SourceInventoryItem])
+    def list_sources(
+        context: Annotated[AuthContext, Depends(get_auth_context)],
+    ) -> list[SourceInventoryItem]:
+        return call_knowledge(resolved_knowledge_service.list_sources, context)
+
     @app.post("/pages", response_model=PageResponse, status_code=status.HTTP_201_CREATED)
     def create_page(
         request: PageCreate,
         context: Annotated[AuthContext, Depends(get_auth_context)],
     ) -> PageResponse:
         return call_knowledge(resolved_knowledge_service.create_page, context, request)
+
+    @app.get("/pages", response_model=list[PageInventoryItem])
+    def list_pages(
+        context: Annotated[AuthContext, Depends(get_auth_context)],
+    ) -> list[PageInventoryItem]:
+        return call_knowledge(resolved_knowledge_service.list_pages, context)
+
+    @app.get("/pages/by-path/{page_path:path}", response_model=PageResponse)
+    def get_page_by_path(
+        page_path: str,
+        context: Annotated[AuthContext, Depends(get_auth_context)],
+    ) -> PageResponse:
+        return call_knowledge(resolved_knowledge_service.get_page_by_path, context, page_path)
 
     @app.get("/pages/{page_id}", response_model=PageResponse)
     def get_page(
@@ -142,6 +177,49 @@ def create_app(
             resolved_knowledge_service.create_page_version, context, page_id, request
         )
 
+    @app.post("/skills", response_model=SkillResponse, status_code=status.HTTP_201_CREATED)
+    def create_skill(
+        request: SkillCreate,
+        context: Annotated[AuthContext, Depends(get_auth_context)],
+    ) -> SkillResponse:
+        return call_knowledge(resolved_skill_service.create_skill, context, request)
+
+    @app.get("/skills", response_model=list[SkillInventoryItem])
+    def list_skills(
+        context: Annotated[AuthContext, Depends(get_auth_context)],
+    ) -> list[SkillInventoryItem]:
+        return call_knowledge(resolved_skill_service.list_skills, context)
+
+    @app.get("/skills/by-slug/{slug}", response_model=SkillResponse)
+    def get_skill_by_slug(
+        slug: str,
+        context: Annotated[AuthContext, Depends(get_auth_context)],
+        version: int | None = None,
+    ) -> SkillResponse:
+        return call_knowledge(resolved_skill_service.get_skill_by_slug, context, slug, version)
+
+    @app.get("/skills/{skill_id}", response_model=SkillResponse)
+    def get_skill(
+        skill_id: UUID,
+        context: Annotated[AuthContext, Depends(get_auth_context)],
+        version: int | None = None,
+    ) -> SkillResponse:
+        return call_knowledge(resolved_skill_service.get_skill, context, skill_id, version)
+
+    @app.post(
+        "/skills/{skill_id}/versions",
+        response_model=SkillResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
+    def create_skill_version(
+        skill_id: UUID,
+        request: SkillVersionCreate,
+        context: Annotated[AuthContext, Depends(get_auth_context)],
+    ) -> SkillResponse:
+        return call_knowledge(
+            resolved_skill_service.create_skill_version, context, skill_id, request
+        )
+
     app.mount("/mcp", mcp_app, name="mcp")
 
     return app
@@ -156,6 +234,12 @@ def call_knowledge[**P, R](function: Callable[P, R], *args: P.args, **kwargs: P.
         raise HTTPException(status_code=403, detail=str(error)) from error
     except (InvalidKnowledgeReference, DuplicatePageContent, KnowledgeConflict) as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+    except SkillNotFound as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except (SkillConflict, VersionConflict) as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except InvalidSkillDocument as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 app = create_app()

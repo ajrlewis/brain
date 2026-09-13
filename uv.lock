@@ -157,6 +157,7 @@ version = "0.1.0"
 source = { editable = "packages/db" }
 dependencies = [
     { name = "alembic" },
+    { name = "brain-schemas" },
     { name = "pgvector" },
     { name = "psycopg", extra = ["binary"] },
     { name = "sqlalchemy" },
@@ -165,6 +166,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.16,<2" },
+    { name = "brain-schemas", editable = "packages/schemas" },
     { name = "pgvector", specifier = ">=0.4,<1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
     { name = "sqlalchemy", specifier = ">=2.0,<3" },
@@ -175,6 +177,7 @@ name = "brain-mcp"
 version = "0.1.0"
 source = { editable = "apps/mcp" }
 dependencies = [
+    { name = "anyio" },
     { name = "brain-auth" },
     { name = "brain-core" },
     { name = "brain-schemas" },
@@ -184,6 +187,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio", specifier = ">=4.10,<5" },
     { name = "brain-auth", editable = "packages/auth" },
     { name = "brain-core", editable = "packages/core" },
     { name = "brain-schemas", editable = "packages/schemas" },
@@ -197,10 +201,14 @@ version = "0.1.0"
 source = { editable = "packages/schemas" }
 dependencies = [
     { name = "pydantic" },
+    { name = "pyyaml" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pydantic", specifier = ">=2.11,<3" }]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.11,<3" },
+    { name = "pyyaml", specifier = ">=6.0,<7" },
+]
 
 [[package]]
 name = "brain-search"
