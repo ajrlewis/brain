@@ -4,14 +4,18 @@ version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
   "brain-auth",
+  "brain-ai",
   "brain-db",
+  "brain-search",
   "brain-schemas",
   "pydantic-settings>=2.10,<3",
 ]
 
 [tool.uv.sources]
 brain-auth = { workspace = true }
+brain-ai = { workspace = true }
 brain-db = { workspace = true }
+brain-search = { workspace = true }
 brain-schemas = { workspace = true }
 
 [build-system]

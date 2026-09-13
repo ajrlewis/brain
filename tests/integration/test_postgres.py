@@ -30,6 +30,7 @@ from brain_auth import AuthContext, AuthorizationDenied, LocalBearerAuthenticato
 from brain_core import (
     DuplicatePageContent,
     KnowledgeService,
+    SearchService,
     Settings,
     SkillService,
     VersionConflict,
@@ -42,6 +43,7 @@ from brain_schemas import (
     PageCreate,
     PageVersionCreate,
     ProvenanceInput,
+    SearchRequest,
     SkillCreate,
     SkillVersionCreate,
     SourceCreate,
@@ -98,7 +100,7 @@ def test_clean_database_migration_and_tenant_constraints(monkeypatch: pytest.Mon
         connection.cursor() as cursor,
     ):
         cursor.execute("SELECT version_num FROM alembic_version")
-        assert cursor.fetchone() == ("20260913_0003",)
+        assert cursor.fetchone() == ("20260913_0004",)
         cursor.execute(
             "INSERT INTO organizations (id, slug, name) "
             "VALUES (%s, 'alpha', 'Alpha'), (%s, 'beta', 'Beta')",
@@ -525,6 +527,119 @@ def test_alembic_has_no_model_metadata_drift() -> None:
 
 
 @pytest.mark.integration
+async def test_search_filters_candidates_before_ranking_and_current_version_limit() -> None:
+    database_url = os.getenv("TEST_DATABASE_URL")
+    if database_url is None:
+        pytest.skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+    sqlalchemy_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    with (
+        psycopg.connect(database_url, autocommit=True) as connection,
+        connection.cursor() as cursor,
+    ):
+        cursor.execute("TRUNCATE organizations CASCADE")
+    seed_northstar(sqlalchemy_url)
+
+    settings = Settings(database_url=PostgresDsn(sqlalchemy_url))
+    engine = create_async_engine(settings)
+    search = SearchService(create_async_session_factory(engine))
+    organization = northstar_id("organization:northstar")
+    principal = northstar_id("principal:alex")
+    group = northstar_id("group:investment")
+    project = northstar_id("page:project-orion")
+    current_version = northstar_id("page:project-orion:version:2")
+    other_organization = northstar_id("organization:harbour")
+    other_principal = northstar_id("principal:harbour")
+    other_policy, other_page, other_version, other_chunk = (uuid4() for _ in range(4))
+    with (
+        psycopg.connect(database_url, autocommit=True) as connection,
+        connection.cursor() as cursor,
+    ):
+        cursor.execute(
+            "INSERT INTO access_policies "
+            "(id, organization_id, name) VALUES (%s, %s, 'Harbour open')",
+            (other_policy, other_organization),
+        )
+        cursor.execute(
+            "INSERT INTO pages (id, organization_id, slug, title, access_policy_id, "
+            "position, steward_id, created_by_id, updated_by_id) "
+            "VALUES (%s, %s, 'cross-tenant', 'Cross tenant secret', %s, 0, %s, %s, %s)",
+            (
+                other_page,
+                other_organization,
+                other_policy,
+                other_principal,
+                other_principal,
+                other_principal,
+            ),
+        )
+        cursor.execute(
+            "INSERT INTO page_versions "
+            "(id, organization_id, page_id, version, content_markdown, content_hash, "
+            "created_by_id) "
+            "VALUES (%s, %s, %s, 1, '# Orion revenue cross-tenant classified', %s, %s)",
+            (
+                other_version,
+                other_organization,
+                other_page,
+                sha256(b"# Orion revenue cross-tenant classified").hexdigest(),
+                other_principal,
+            ),
+        )
+        cursor.execute(
+            "UPDATE pages SET current_version_id = %s WHERE id = %s",
+            (other_version, other_page),
+        )
+        cursor.execute(
+            "INSERT INTO chunks (id, organization_id, page_version_id, position, heading_path, "
+            "content, content_hash, embedding) "
+            "VALUES (%s, %s, %s, 0, '[]', 'Orion revenue cross-tenant classified', %s, "
+            "'[1,0,0,0,0,0,0,0]')",
+            (
+                other_chunk,
+                other_organization,
+                other_version,
+                sha256(b"Orion revenue cross-tenant classified").hexdigest(),
+            ),
+        )
+
+    allowed = await search.search(
+        AuthContext(organization, principal, frozenset({group})),
+        SearchRequest(query="Orion revenue", limit=10),
+    )
+    outsider = await search.search(
+        AuthContext(organization, principal, frozenset()),
+        SearchRequest(query="Orion revenue", limit=1),
+    )
+    repeated = await search.search(
+        AuthContext(organization, principal, frozenset({group})),
+        SearchRequest(query="Orion revenue", limit=10),
+    )
+    semantic_only = await search.search(
+        AuthContext(organization, principal, frozenset({group})),
+        SearchRequest(query="unfindabletoken", limit=2),
+    )
+
+    project_results = [result for result in allowed.results if result.page_id == project]
+    assert project_results
+    assert any(result.lexical_score > 0 for result in project_results)
+    assert all(
+        abs(result.score - result.lexical_score - result.semantic_score) < 1e-6
+        for result in allowed.results
+    )
+    assert [(result.chunk_id, result.score) for result in repeated.results] == [
+        (result.chunk_id, result.score) for result in allowed.results
+    ]
+    assert semantic_only.results
+    assert all(result.lexical_score == 0 for result in semantic_only.results)
+    assert all(result.page_version_id == current_version for result in project_results)
+    assert outsider.results
+    assert all(result.page_id != project for result in outsider.results)
+    assert all(result.page_id != other_page for result in allowed.results + outsider.results)
+    assert all("£45m" not in result.snippet for result in outsider.results)
+    await engine.dispose()
+
+
+@pytest.mark.integration
 async def test_http_and_mcp_have_equivalent_knowledge_access() -> None:
     database_url = os.getenv("TEST_DATABASE_URL")
     if database_url is None:
@@ -546,6 +661,7 @@ async def test_http_and_mcp_have_equivalent_knowledge_access() -> None:
     settings = Settings(database_url=PostgresDsn(sqlalchemy_url))
     service = KnowledgeService(create_async_session_factory(create_async_engine(settings)))
     skill_service = SkillService(create_async_session_factory(create_async_engine(settings)))
+    search_service = SearchService(create_async_session_factory(create_async_engine(settings)))
     allowed_context = AuthContext(organization, principal, frozenset({group}))
     page = await service.create_page(
         allowed_context,
@@ -594,6 +710,7 @@ tools:
         app = create_app(
             knowledge_service=service,
             skill_service=skill_service,
+            search_service=search_service,
             authenticator=LocalBearerAuthenticator(token="secret", context=context),
         )
 
@@ -622,6 +739,7 @@ tools:
     allowed_app = create_app(
         knowledge_service=service,
         skill_service=skill_service,
+        search_service=search_service,
         authenticator=LocalBearerAuthenticator(token="secret", context=allowed_context),
     )
     allowed_client = cast(HttpClient, TestClient(allowed_app))
@@ -660,6 +778,19 @@ tools:
     assert isinstance(allowed_mcp.structured_content, dict)
     assert len(allowed_http.json()["current_version"]["provenance"]) == 1
     assert len(allowed_mcp.structured_content["current_version"]["provenance"]) == 1
+    search_http = allowed_client.post(
+        "/search",
+        headers={"Authorization": "Bearer secret"},
+        json={"query": "Transport parity", "limit": 5},
+    )
+    search_mcp = await mcp_result(
+        allowed_context,
+        "search",
+        {"request": {"query": "Transport parity", "limit": 5}},
+    )
+    assert search_http.status_code == 200
+    assert search_mcp.is_error is False
+    assert search_mcp.structured_content == search_http.json()
     skill_http = allowed_client.get(
         "/skills/by-slug/transport-skill", headers={"Authorization": "Bearer secret"}
     )
@@ -691,6 +822,7 @@ tools:
     outsider_app = create_app(
         knowledge_service=service,
         skill_service=skill_service,
+        search_service=search_service,
         authenticator=LocalBearerAuthenticator(token="secret", context=outsider),
     )
     outsider_client = cast(HttpClient, TestClient(outsider_app))

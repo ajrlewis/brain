@@ -137,17 +137,21 @@ name = "brain-core"
 version = "0.1.0"
 source = { editable = "packages/core" }
 dependencies = [
+    { name = "brain-ai" },
     { name = "brain-auth" },
     { name = "brain-db" },
     { name = "brain-schemas" },
+    { name = "brain-search" },
     { name = "pydantic-settings" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "brain-ai", editable = "packages/ai" },
     { name = "brain-auth", editable = "packages/auth" },
     { name = "brain-db", editable = "packages/db" },
     { name = "brain-schemas", editable = "packages/schemas" },
+    { name = "brain-search", editable = "packages/search" },
     { name = "pydantic-settings", specifier = ">=2.10,<3" },
 ]
 
@@ -157,7 +161,9 @@ version = "0.1.0"
 source = { editable = "packages/db" }
 dependencies = [
     { name = "alembic" },
+    { name = "brain-ai" },
     { name = "brain-schemas" },
+    { name = "brain-search" },
     { name = "pgvector" },
     { name = "psycopg", extra = ["binary"] },
     { name = "sqlalchemy" },
@@ -166,7 +172,9 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.16,<2" },
+    { name = "brain-ai", editable = "packages/ai" },
     { name = "brain-schemas", editable = "packages/schemas" },
+    { name = "brain-search", editable = "packages/search" },
     { name = "pgvector", specifier = ">=0.4,<1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
     { name = "sqlalchemy", specifier = ">=2.0,<3" },
@@ -214,6 +222,16 @@ requires-dist = [
 name = "brain-search"
 version = "0.1.0"
 source = { editable = "packages/search" }
+dependencies = [
+    { name = "pgvector" },
+    { name = "sqlalchemy" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pgvector", specifier = ">=0.4,<1" },
+    { name = "sqlalchemy", specifier = ">=2.0,<3" },
+]
 
 [[package]]
 name = "brain-workspace"

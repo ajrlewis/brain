@@ -44,6 +44,7 @@ export function AppShell({
         <aside className="sidebar">
           <p className="eyebrow">Workspace</p>
           <nav>
+            <Link href="/search">Search</Link>
             <Link href="/pages">Pages & folders</Link>
             <Link href="/skills">Skills</Link>
             <Link href="/references">Reference files</Link>

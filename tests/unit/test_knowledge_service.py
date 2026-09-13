@@ -13,7 +13,7 @@ from brain_core import (
     VersionConflict,
 )
 from brain_core.knowledge import KnowledgeService
-from brain_db import Folder, Page, PageVersion, PageVersionSource, Source
+from brain_db import Chunk, Folder, Page, PageVersion, PageVersionSource, Source
 from brain_schemas import FolderCreate, PageCreate, PageVersionCreate, ProvenanceInput, SourceCreate
 
 ORG = UUID("10000000-0000-0000-0000-000000000001")
@@ -31,6 +31,7 @@ class FakeKnowledgeRepository:
     page_records: dict[UUID, Page]
     page_versions: list[PageVersion]
     links: list[PageVersionSource]
+    chunks: dict[UUID, list[Chunk]]
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -43,6 +44,7 @@ class FakeKnowledgeRepository:
         cls.page_records = {}
         cls.page_versions = []
         cls.links = []
+        cls.chunks = {}
 
     async def policy_group_ids(self, organization_id: UUID, policy_id: UUID) -> set[UUID] | None:
         return self.policies.get(policy_id) if organization_id == ORG else None
@@ -115,6 +117,9 @@ class FakeKnowledgeRepository:
 
     async def add_version_source(self, link: PageVersionSource) -> None:
         self.links.append(link)
+
+    async def replace_chunks(self, page_version_id: UUID, chunks: list[Chunk]) -> None:
+        self.chunks[page_version_id] = chunks
 
     async def versions(self, page_id: UUID) -> list[PageVersion]:
         return [version for version in self.page_versions if version.page_id == page_id]
@@ -253,6 +258,13 @@ async def test_page_versions_authorization_and_hidden_provenance(
     )
     page = await service.create_page(context, request)
     assert page.current_version.version == 1
+    original_chunk_ids = [
+        chunk.id for chunk in FakeKnowledgeRepository.chunks[page.current_version.id]
+    ]
+    assert await service.regenerate_page_chunks(context, page.id) == len(original_chunk_ids)
+    assert [
+        chunk.id for chunk in FakeKnowledgeRepository.chunks[page.current_version.id]
+    ] == original_chunk_ids
     assert len(page.current_version.provenance) == 1
     assert (await service.list_pages(context))[0].path == "/portfolio/active/orion"
     assert (await service.get_page_by_path(context, "/portfolio/active/orion")).id == page.id
@@ -270,6 +282,8 @@ async def test_page_versions_authorization_and_hidden_provenance(
     )
     assert updated.current_version.version == 2
     assert [version.version for version in updated.versions] == [1, 2]
+    assert page.current_version.id in FakeKnowledgeRepository.chunks
+    assert updated.current_version.id in FakeKnowledgeRepository.chunks
 
     with pytest.raises(VersionConflict):
         await service.create_page_version(

@@ -1,6 +1,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -344,6 +345,47 @@ class PageVersion(Base):
     content_markdown: Mapped[str] = mapped_column(Text, nullable=False)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     created_by_id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class Chunk(Base):
+    """Regenerable retrieval data attributed to one immutable PageVersion."""
+
+    __tablename__ = "chunks"
+    __table_args__ = (
+        UniqueConstraint("page_version_id", "position"),
+        Index(
+            "ix_chunks_fts",
+            text("to_tsvector('english', content)"),
+            postgresql_using="gin",
+        ),
+        Index(
+            "ix_chunks_embedding",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+        CheckConstraint("position >= 0", name="position_nonnegative"),
+        CheckConstraint("length(btrim(content)) > 0", name="content_not_blank"),
+        CheckConstraint("content_hash ~ '^[0-9a-f]{64}$'", name="content_hash_sha256"),
+        CheckConstraint("jsonb_typeof(heading_path) = 'array'", name="heading_path_array"),
+        ForeignKeyConstraint(
+            ["organization_id", "page_version_id"],
+            ["page_versions.organization_id", "page_versions.id"],
+            ondelete="CASCADE",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4)
+    organization_id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), nullable=False)
+    page_version_id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    heading_path: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    embedding: Mapped[list[float]] = mapped_column(Vector(8), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

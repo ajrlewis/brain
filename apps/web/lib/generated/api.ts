@@ -141,6 +141,28 @@ export const PageVersionCreate = z.object({
   expected_current_version_id: z.string().uuid(),
   sources: z.array(ProvenanceInput).optional(),
 });
+export const SearchRequest = z.object({
+  limit: z.number().int().gte(1).lte(50).optional().default(10),
+  query: z.string().min(1).max(500),
+});
+export const SearchResult = z
+  .object({
+    chunk_id: z.string().uuid(),
+    chunk_position: z.number().int(),
+    heading_path: z.array(z.string()),
+    lexical_score: z.number(),
+    page_id: z.string().uuid(),
+    page_version_id: z.string().uuid(),
+    path: z.string(),
+    score: z.number(),
+    semantic_score: z.number(),
+    snippet: z.string(),
+    title: z.string(),
+  })
+  .passthrough();
+export const SearchResponse = z
+  .object({ query: z.string(), results: z.array(SearchResult) })
+  .passthrough();
 export const SkillInventoryItem = z
   .object({
     content_hash: z.string(),

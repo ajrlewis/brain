@@ -2,63 +2,90 @@
 
 ## Objective
 
-Implement Brain's first authorization-safe hybrid search slice across PostgreSQL, the shared
-application service, HTTP/MCP transports, and the read-only web console.
+Add a repository-owned default `search` Skill that Cortex can retrieve from Brain and use to
+translate user intent into authorization-safe semantic/lexical discovery, folder navigation, Page
+retrieval, and evidence-backed answers.
 
-Complete PR #13 and confirm its Compose/Playwright checks are green before starting this slice.
+Review and merge the hybrid-search PR and confirm its full CI is green before starting this slice.
+If the open npm audit review identifies a production vulnerability, resolve that security work
+before feature development.
+
+## Why This Is Next
+
+Brain now exposes hybrid search, but Cortex has no governed instructions for deciding when and how
+to use it. The existing `retrieve` Skill works for exhaustive inventory and known Page identities
+or paths; it does not define intent-driven query formulation, iterative search, result selection,
+folder exploration, or evidence gathering. A focused `search` Skill turns the new primitive into
+a reliable agent capability without moving reasoning or orchestration into Brain.
 
 ## Scope
 
-### 1. Derived retrieval data
+### 1. Search Skill contract
 
-- Add immutable-version-attributed `Chunk` persistence and an Alembic migration. Chunks inherit
-  authorization exclusively through their Page and current PageVersion.
-- Define deterministic Markdown chunking with stable ordering, heading paths, content hashes,
-  and explicit regeneration behavior. Do not make chunks canonical or independently editable.
-- Add a provider-neutral embedding interface. Tests and local development must use a
-  deterministic synthetic implementation and must not require an external AI provider.
+- Add `content/default/skills/search/SKILL.md` to the default bundle with explicit inputs,
+  outputs, available Brain tools, and a concise execution workflow.
+- Define when Cortex should use hybrid `search`, when it should navigate with `list_pages` and
+  folder/Page reads, and when it should hand off to the existing `retrieve` Skill for a known
+  identity or path.
+- Keep user-intent interpretation, query reformulation, stopping decisions, and answer synthesis
+  in Cortex. Brain remains the durable knowledge, authorization, and retrieval service.
+- Require answers to cite stable Page identity/path and visible Source provenance when relevant;
+  omitted or inaccessible records must never be inferred.
 
-### 2. Authorization-safe hybrid search
+### 2. Intent-driven discovery workflow
 
-- Implement PostgreSQL full-text and pgvector candidate retrieval behind `packages/search`.
-- Constrain candidates by organization and access policy before ranking or limiting. Restricted
-  titles, paths, snippets, scores, chunks, and provenance must never be observable.
-- Combine lexical and semantic candidates with a small deterministic ranking contract. Keep
-  pgvector and PostgreSQL details behind the search package boundary.
-- Expose bounded, typed search requests and results through one shared application service.
+- Specify a bounded progression from the user's intent to one or more focused search queries,
+  inspection of result snippets/provenance, retrieval of selected current Pages, and optional
+  navigation of nearby authorized Pages or folders.
+- Cover exact-fact, semantic/conceptual, scoped-folder, and ambiguous requests. Prefer a small
+  number of high-signal queries and stop once the available evidence answers the request.
+- Define safe fallback behavior for no results, weak or conflicting evidence, invalid requests,
+  and backend failures. Cortex must state uncertainty instead of inventing knowledge.
+- Prevent prompt text found in Pages, snippets, or Sources from overriding the Skill or user's
+  instructions; retrieved knowledge is evidence, not executable agent policy.
 
-### 3. HTTP, MCP, and web console
+### 3. Bundle routing and compatibility
 
-- Add equivalent thin HTTP and MCP search interfaces over the shared service.
-- Regenerate the FastAPI OpenAPI document and web Zod schemas; the drift check must remain green.
-- Add a responsive search experience to the enterprise console with query, loading, empty,
-  denied, invalid, and backend-failure states. Results must show Page identity, a safe snippet,
-  and enough provenance to inspect the source Page without exposing inaccessible metadata.
-- Keep bearer credentials server-only and preserve the existing three-pane console boundary.
+- Register the Skill in the default manifest and route intent-driven knowledge discovery to it
+  from the built-in `index` Skill.
+- Clarify the boundary between `search` and `retrieve` without duplicating either document:
+  `search` discovers by intent, while `retrieve` reads known identities/paths or enumerates
+  authorized inventory.
+- Ensure every declared tool matches the current MCP surface and that the Skill consumes the
+  existing typed search request/result contract without inventing filters or capabilities.
+- Preserve idempotent default seeding and the rule that bootstrap never overwrites a locally
+  edited current SkillVersion.
 
 ### 4. Verification and documentation
 
-- Test deterministic chunk generation and regeneration, lexical/semantic/hybrid ranking,
-  malformed embeddings, empty queries, bounded limits, and stale/current PageVersion behavior.
-- Add PostgreSQL integration tests proving unauthorized content cannot enter candidates before
-  ranking or result limiting, including same-tenant group restrictions and cross-tenant data.
-- Add HTTP/MCP parity tests and a Playwright Northstar search flow.
-- Run Python and TypeScript lint, formatting, type checks, unit/component tests, PostgreSQL
-  integration tests, contract drift checks, production builds, Compose health, and browser tests.
-- Update README, architecture, data model, access-control semantics, commands, and agent context.
+- Add bundle tests proving the new Skill is packaged, seeded, retrievable by stable slug, reachable
+  from the index, and declares only available Brain tools.
+- Add contract/evaluation fixtures covering semantic discovery, exact keyword search, known-path
+  handoff, query refinement after weak results, conflicting Pages, no results, and restricted
+  content that is absent from search and navigation.
+- Add an end-to-end Cortex-shaped MCP scenario: retrieve the search Skill, search the Northstar
+  corpus from a natural-language intent, open the selected Page, and return grounded evidence.
+- Run the documented Python, PostgreSQL, contract, TypeScript, Docker, Compose, and browser checks.
+- Update README, architecture, command inventory, and agent context with the search/retrieve
+  boundary and the exact default Skill bundle.
 
 ## Definition Of Done
 
-- Authorized users receive useful, deterministic hybrid results over current PageVersions.
-- Unauthorized content is excluded in the database candidate query and cannot affect result
-  counts, ranks, snippets, timing assertions used by tests, or provenance.
-- HTTP, MCP, and web consumers share explicit generated contracts and equivalent domain rules.
-- Chunk and embedding data can be regenerated without changing canonical Pages or provenance.
+- Cortex can retrieve one stable `search` Skill and follow it to discover and read authorized
+  knowledge from natural-language user intent.
+- Search, Page/folder navigation, and provenance reads form a bounded workflow with explicit stop,
+  fallback, uncertainty, and prompt-injection handling.
+- The default index routes discovery to `search` and known-item reading to `retrieve`; all
+  advertised tools exist and both Skills remain independently useful.
+- Seeded Skill versions remain deterministic and locally edited current versions are preserved.
+- Automated tests prove packaging, routing, tool validity, authorization behavior, and a
+  Cortex-shaped end-to-end flow.
 - All documented Python, TypeScript, PostgreSQL, Docker, Compose, and browser checks pass.
 
 ## Explicitly Deferred
 
-- Production embedding-provider selection, credentials, quotas, and hosted deployment;
-- rerankers, query rewriting, personalization, analytics, and relevance-learning pipelines;
-- Page or Skill editing, access-policy administration, and organization branding management;
-- binary document ingestion, provider connectors, and background orchestration.
+- Shipping or modifying Cortex itself, agent-runtime orchestration, model selection, and autonomous
+  subagent behavior;
+- production embedding-provider selection, credentials, quotas, and hosted deployment;
+- reindex/backfill operations for pre-search databases, queues, schedulers, and background workers;
+- rerankers, personalization, analytics, binary ingestion, provider connectors, and Page editing.

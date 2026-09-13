@@ -9,10 +9,12 @@ import yaml
 from sqlalchemy import Table, inspect
 from sqlalchemy.dialects.postgresql import insert
 
+from brain_ai import SyntheticEmbeddingProvider
 from brain_db.base import Base
 from brain_db.models import (
     AccessPolicy,
     AccessPolicyGroup,
+    Chunk,
     Folder,
     Group,
     GroupMembership,
@@ -29,6 +31,7 @@ from brain_db.offline import (
     offline_session_scope,
 )
 from brain_schemas import parse_skill_document
+from brain_search import chunk_markdown
 
 NAMESPACE = UUID("8d18e949-c857-54f1-87c8-106abf75547c")
 
@@ -334,6 +337,31 @@ def seed_northstar(database_url: str, *, bundle_root: Path | None = None) -> Non
                         content_markdown=markdown,
                         content_hash=sha256(markdown.encode()).hexdigest(),
                         created_by_id=cortex,
+                    )
+                    .on_conflict_do_nothing()
+                )
+                drafts = chunk_markdown(markdown)
+                vectors = SyntheticEmbeddingProvider().embed_sync(
+                    [draft.content for draft in drafts]
+                )
+                session.execute(
+                    insert(model_table(Chunk))
+                    .values(
+                        [
+                            {
+                                "id": northstar_id(
+                                    f"chunk:{version_id}:{draft.position}:{draft.content_hash}"
+                                ),
+                                "organization_id": organization_id,
+                                "page_version_id": version_id,
+                                "position": draft.position,
+                                "heading_path": list(draft.heading_path),
+                                "content": draft.content,
+                                "content_hash": draft.content_hash,
+                                "embedding": vector,
+                            }
+                            for draft, vector in zip(drafts, vectors, strict=True)
+                        ]
                     )
                     .on_conflict_do_nothing()
                 )

@@ -19,6 +19,7 @@ from brain_schemas.knowledge import (
     SourceInventoryItem,
     SourceResponse,
 )
+from brain_schemas.search import SearchRequest, SearchResponse, SearchResult
 from brain_schemas.skill_document import InvalidSkillDocument, parse_skill_document
 
 __all__ = [
@@ -34,6 +35,9 @@ __all__ = [
     "PageVersionResponse",
     "ProvenanceInput",
     "ProvenanceResponse",
+    "SearchRequest",
+    "SearchResponse",
+    "SearchResult",
     "SkillCreate",
     "SkillInventoryItem",
     "SkillResponse",

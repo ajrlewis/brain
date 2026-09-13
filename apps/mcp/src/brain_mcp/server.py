@@ -20,6 +20,7 @@ from brain_core import (
     KnowledgeConflict,
     KnowledgeNotFound,
     KnowledgeService,
+    SearchService,
     Settings,
     SkillConflict,
     SkillNotFound,
@@ -28,6 +29,7 @@ from brain_core import (
     create_knowledge_service,
     create_local_authenticator,
     create_persistence_services,
+    create_search_service,
     create_skill_service,
 )
 from brain_core.settings import get_settings
@@ -41,6 +43,8 @@ from brain_schemas import (
     PageInventoryItem,
     PageResponse,
     PageVersionCreate,
+    SearchRequest,
+    SearchResponse,
     SkillCreate,
     SkillInventoryItem,
     SkillResponse,
@@ -58,6 +62,7 @@ def create_server(
     identity_service: IdentityService | None = None,
     knowledge_service: KnowledgeService | None = None,
     skill_service: SkillService | None = None,
+    search_service: SearchService | None = None,
     authenticator: LocalBearerAuthenticator | None = None,
 ) -> FastMCP:
     resolved_settings = settings or get_settings()
@@ -66,15 +71,18 @@ def create_server(
         settings=resolved_settings,
     )
     resolved_identity_service = identity_service or IdentityService()
-    if knowledge_service is None and skill_service is None:
-        resolved_knowledge_service, resolved_skill_service = create_persistence_services(
-            resolved_settings
-        )
+    if knowledge_service is None and skill_service is None and search_service is None:
+        (
+            resolved_knowledge_service,
+            resolved_skill_service,
+            resolved_search_service,
+        ) = create_persistence_services(resolved_settings)
     else:
         resolved_knowledge_service = knowledge_service or create_knowledge_service(
             resolved_settings
         )
         resolved_skill_service = skill_service or create_skill_service(resolved_settings)
+        resolved_search_service = search_service or create_search_service(resolved_settings)
     resolved_authenticator = authenticator or create_local_authenticator(resolved_settings)
     server = FastMCP(name="Brain")
 
@@ -192,6 +200,11 @@ def create_server(
         return await call_knowledge(
             resolved_skill_service.create_skill_version, authenticated(), skill_id, request
         )
+
+    @server.tool
+    async def search(request: SearchRequest) -> SearchResponse:
+        """Search authorized current Page versions with hybrid retrieval."""
+        return await call_knowledge(resolved_search_service.search, authenticated(), request)
 
     return server
 

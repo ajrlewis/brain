@@ -1,12 +1,14 @@
 from hashlib import sha256
-from uuid import UUID
+from uuid import UUID, uuid5
 
 from sqlalchemy.exc import IntegrityError
 
+from brain_ai import EmbeddingProvider, SyntheticEmbeddingProvider, validate_embeddings
 from brain_auth import AuthContext, AuthorizationDenied, require_access
 from brain_core.settings import Settings
 from brain_db import (
     AsyncSessionFactory,
+    Chunk,
     Folder,
     KnowledgeRepository,
     Page,
@@ -31,6 +33,7 @@ from brain_schemas import (
     SourceInventoryItem,
     SourceResponse,
 )
+from brain_search import chunk_markdown
 
 
 class KnowledgeNotFound(Exception):
@@ -56,8 +59,13 @@ class InvalidKnowledgeReference(Exception):
 class KnowledgeService:
     """Govern knowledge through one shared HTTP/MCP application boundary."""
 
-    def __init__(self, session_factory: AsyncSessionFactory) -> None:
+    def __init__(
+        self,
+        session_factory: AsyncSessionFactory,
+        embedding_provider: EmbeddingProvider | None = None,
+    ) -> None:
         self.session_factory = session_factory
+        self.embedding_provider = embedding_provider or SyntheticEmbeddingProvider()
 
     async def create_folder(self, context: AuthContext, request: FolderCreate) -> FolderResponse:
         async with async_session_scope(self.session_factory) as session:
@@ -281,6 +289,7 @@ class KnowledgeService:
             created_by_id=context.principal_id,
         )
         await repository.add_version(version)
+        await self._regenerate_chunks(repository, version)
         for item in provenance:
             await repository.add_version_source(
                 PageVersionSource(
@@ -293,6 +302,46 @@ class KnowledgeService:
             )
         await repository.session.flush()
         return version
+
+    async def regenerate_page_chunks(self, context: AuthContext, page_id: UUID) -> int:
+        """Replace derived chunks for an authorized current PageVersion."""
+        async with async_session_scope(self.session_factory) as session:
+            repository = KnowledgeRepository(session)
+            await self._require_context(repository, context)
+            page = await repository.get_page(context.organization_id, page_id)
+            if page is None or page.current_version_id is None:
+                raise KnowledgeNotFound("Page was not found")
+            await self._require_resource(repository, context, page.access_policy_id)
+            version = next(
+                item
+                for item in await repository.versions(page.id)
+                if item.id == page.current_version_id
+            )
+            return await self._regenerate_chunks(repository, version)
+
+    async def _regenerate_chunks(
+        self, repository: KnowledgeRepository, version: PageVersion
+    ) -> int:
+        drafts = chunk_markdown(version.content_markdown)
+        vectors = validate_embeddings(
+            await self.embedding_provider.embed([draft.content for draft in drafts]), len(drafts)
+        )
+        namespace = UUID("e6941b47-56f8-53ac-8feb-f04ddee7ce63")
+        chunks = [
+            Chunk(
+                id=uuid5(namespace, f"{version.id}:{draft.position}:{draft.content_hash}"),
+                organization_id=version.organization_id,
+                page_version_id=version.id,
+                position=draft.position,
+                heading_path=list(draft.heading_path),
+                content=draft.content,
+                content_hash=draft.content_hash,
+                embedding=vector,
+            )
+            for draft, vector in zip(drafts, vectors, strict=True)
+        ]
+        await repository.replace_chunks(version.id, chunks)
+        return len(chunks)
 
     async def _page_response(
         self, repository: KnowledgeRepository, context: AuthContext, page: Page
