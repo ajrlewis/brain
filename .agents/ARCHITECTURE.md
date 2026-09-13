@@ -53,6 +53,13 @@ SkillVersions. Both parent/version pairs enforce same-tenant/current-version con
 The application process never migrates implicitly: Compose orders PostgreSQL
 health, one-shot migration completion, then API startup.
 
+Repository-owned content has three explicit lifecycles. `content/default` is the packaged
+canonical built-in Skill bundle, with executable documents at `<slug>/SKILL.md` and optional
+validated references. `examples/northstar` is a packaged, text-only fictional example whose
+manifest drives the explicit idempotent database seed while retaining immutable history and
+stable UUIDs. `tests/fixtures/dummy` is provider-neutral content-only test data and is neither
+a production default nor a database seed.
+
 ## Durable Data Rules
 
 - `Source` records provenance; `Page` records stable knowledge identity; immutable `PageVersion` records content.

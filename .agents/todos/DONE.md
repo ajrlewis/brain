@@ -4,6 +4,10 @@ Completed persistent setup work, newest first. This is not a changelog or produc
 
 ## Completed Items
 
+- 2026-09-13 — Migrated repository-owned default Skills to conventional per-Skill directories
+  while preserving exact executable Markdown, added validated packaged references, introduced
+  explicit dummy fixture boundaries, and moved the deterministic Northstar seed corpus into a
+  checked-in text manifest and documents.
 - 2026-09-13 — Migrated all runtime database access to a shared SQLAlchemy AsyncSession and
   psycopg async boundary across repositories, services, FastAPI, and FastMCP; separated the
   synchronous offline seed/migration utility; added typed pool and PostgreSQL timeouts; and

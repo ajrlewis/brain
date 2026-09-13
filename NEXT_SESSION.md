@@ -1,120 +1,83 @@
 # Next Session
 
-## Status
-
-Completed on 2026-09-13. The async runtime boundary, concurrency verification, operational
-documentation, and full project checks described below were implemented and verified. The
-next persistence refactor is tracked in `.agents/todos/TODO.md`: evaluate conventional
-per-Skill bundle directories with `SKILL.md` and `references/` while preserving seed and
-review behavior.
-
 ## Objective
 
-Migrate Brain's complete runtime database boundary from synchronous SQLAlchemy/psycopg
-execution and worker-thread offloading to native async I/O. The target deployment remains
-one Brain/Cortex stack for one customer Organization with roughly 400 potential users.
+Build Brain's initial read-only Next.js web console with a reusable component system and
+runtime company theming through validated semantic design tokens.
 
-This is a coordinated boundary change, not a route-signature edit. FastAPI and FastMCP
-must directly await the same async application services, and those services must use
-SQLAlchemy `AsyncSession` through async repositories. Preserve all authorization,
-transaction, tenant-isolation, immutable-history, and optimistic-concurrency behavior.
+The console is a human interface over Brain's existing public HTTP API. It must not duplicate
+authorization or domain rules from the backend.
 
-Alembic migrations and explicit administrative seed commands are offline processes and may
-remain synchronous. Do not retain a second synchronous runtime repository/service path.
+## Scope
 
-## Immediate Scope
+### 1. Web application foundation
 
-### 1. Async database foundation
+- Add `apps/web` using the current stable Next.js App Router, React, TypeScript, and Tailwind
+  CSS conventions.
+- Integrate the application into the repository's package workflow, canonical checks, Docker
+  build, and Compose stack without coupling the Python API to Next.js or Vercel.
+- Use Server Components by default and Client Components only where browser state or
+  interaction requires them.
+- Add typed environment configuration for the internal Brain API URL and local development
+  authentication boundary. Do not expose bearer tokens to browser JavaScript.
 
-- Add a runtime SQLAlchemy async engine using psycopg's async support and an
-  `async_sessionmaker[AsyncSession]`.
-- Replace the runtime `SessionFactory` and `session_scope` contracts with async equivalents,
-  including commit, rollback, and close behavior.
-- Keep a clearly named synchronous engine/session utility only where Alembic or explicit
-  seed commands require it; document that it is not an application request path.
-- Add typed environment settings for connection-pool size, overflow, acquisition timeout,
-  connection recycling, and PostgreSQL statement/lock timeouts. Choose conservative
-  defaults for a single-Organization deployment and explain how they relate to database
-  connection limits rather than to the raw count of 400 users.
-- Preserve one session per operation. Never share an `AsyncSession` across concurrent tasks.
+### 2. Company theme contract
 
-### 2. Async repositories and services
+- Define semantic design tokens for primary, accent, surface, text, muted text, borders,
+  focus, success, warning, and danger states. Components must consume semantic tokens rather
+  than company-specific colour names or dynamically constructed Tailwind class names.
+- Implement runtime theme selection with CSS custom properties so changing company palettes
+  does not require rebuilding component markup or generating arbitrary CSS.
+- Include a neutral Brain theme and a wholly synthetic Northstar theme as checked-in web
+  configuration. Validate token completeness and safe CSS colour values.
+- Keep the theme source behind a small typed interface that can later consume governed
+  Organization branding from the API. Do not add database branding fields in this slice.
+- Preserve accessible contrast, visible focus states, reduced-motion preferences, and usable
+  light/dark behavior where supported.
 
-- Convert every runtime identity, knowledge, and Skill repository database operation to
-  `async def`, awaiting `scalar`, `scalars`, `execute`, `flush`, and transaction work.
-- Convert every runtime service method that reaches persistence to `async def` and await its
-  repository. Keep pure CPU-only validation helpers synchronous.
-- Preserve Page and Skill row locking with `SELECT ... FOR UPDATE`; compare
-  `expected_current_version_id` while holding the lock and commit the new immutable version
-  plus current pointer atomically.
-- Preserve authorization-before-disclosure, provenance intersection, same-tenant reference
-  checks, bounded inventory queries, YAML validation, original Markdown bytes, and stable
-  path behavior.
-- Keep seed idempotency and read-only bundle review behavior unchanged.
+### 3. Reusable components and first vertical slice
 
-### 3. Async HTTP and MCP transports
+- Build the minimum reusable primitives needed for the console: application shell, header,
+  sidebar, breadcrumbs, buttons, cards, tables/lists, badges, and loading, empty, error, and
+  not-found states.
+- Add safe Markdown rendering shared by Page and Skill views. Do not permit raw untrusted HTML
+  or styling to escape the application theme boundary.
+- Implement a responsive read-only knowledge flow against the real Brain HTTP API:
+  folder-tree navigation, authorized Page inventory, and Page detail with rendered current
+  Markdown and visible provenance.
+- Use the checked-in Northstar corpus for the local demonstration and provider-neutral dummy
+  fixtures for focused component and transport tests.
 
-- Convert database-backed FastAPI handlers to `async def` and directly await shared services.
-- Convert FastMCP database tools to directly await the same services.
-- Remove `anyio.to_thread.run_sync` and the temporary MCP worker-offload helper after no
-  runtime service beneath either transport performs blocking database I/O.
-- Keep health and provider-neutral local authentication simple; do not make pure synchronous
-  work async merely for visual consistency.
-- Preserve equivalent HTTP/MCP allow, deny, missing, validation, duplicate, and stale-conflict
-  behavior.
+### 4. Verification and documentation
 
-### 4. Concurrency and load verification
+- Add focused tests for theme validation and switching, semantic component rendering,
+  responsive navigation states, Markdown sanitization, API success/deny/missing/failure
+  behavior, and prevention of client-side token exposure.
+- Add one browser smoke flow covering the Northstar Page inventory and Page detail.
+- Run lint, formatting, type checking, unit/component tests, production Next.js build, existing
+  Python checks, Compose startup/health, and Docker builds.
+- Update `README.md`, `.agents/ARCHITECTURE.md`, `.agents/COMMANDS.md`, environment examples,
+  and relevant web documentation with the implemented boundary and verified commands.
 
-- Add deterministic tests proving async session commit, rollback, close, and task isolation.
-- Add PostgreSQL tests that race two Page writers and two Skill writers from the same base.
-  Exactly one mutation must become current; the loser must conflict; history must contain no
-  unreviewed or partially committed version.
-- Add concurrent HTTP and MCP integration tests using real PostgreSQL connections. Exercise
-  at least 100 in-flight reads across Page, Source, Skill, and inventory operations, including
-  authorized and denied requests.
-- Include an event-loop responsiveness check while database requests are in flight so a
-  hidden blocking driver or repository call fails deterministically.
-- Exercise a pool smaller than the in-flight request count to prove requests wait safely
-  without session sharing or connection exhaustion. Verify pool-acquisition and statement
-  timeouts return controlled failures rather than hanging indefinitely.
-- Record the test machine, PostgreSQL/pgvector versions, concurrency, pool settings,
-  throughput, latency percentiles, failures, and interpretation. Avoid brittle performance
-  assertions in CI; assert correctness and responsiveness, and report measurements
-  separately.
+## Definition of Done
 
-### 5. Documentation and operational stance
-
-- Update `README.md`, `.agents/ARCHITECTURE.md`, `.agents/COMMANDS.md`, and dependency/runtime
-  documentation to describe the native async request boundary and explicit pool controls.
-- Document how operators size the application pool against the managed PostgreSQL connection
-  budget when scaling processes or replicas.
-- Keep the initial single-customer model and tenant-safe constraints. Do not add shared-SaaS
-  tenant discovery or administration.
-- Keep Brain a store/service. Do not add scheduling, Skill execution, autonomous agents, or
-  lint orchestration.
-
-## Definition Of Done
-
-- No FastAPI or FastMCP request path performs synchronous database I/O or uses worker-thread
-  offloading for a runtime service.
-- Runtime repositories and persistence-backed services use one consistent `AsyncSession`
-  boundary; offline migration/seed sync utilities are clearly separated.
-- Concurrent stale Page and Skill writes deterministically publish exactly one winner while
-  retaining valid immutable history.
-- HTTP and MCP preserve equivalent authorization and error behavior under concurrent load.
-- A 100+-request PostgreSQL-backed concurrency exercise passes with a deliberately smaller
-  pool, responsive event loop, no leaked sessions/connections, and recorded measurements.
-- Clean Alembic upgrade, zero metadata drift, default and Northstar seeds, bundle review,
-  quality checks, integration tests, Compose startup/health, and Docker build pass.
-- Documentation explains pool sizing for one Organization with roughly 400 potential users
-  and distinguishes measured capacity from unsupported user-count claims.
+- `apps/web` builds and runs locally and in Compose using documented commands.
+- Neutral Brain and Northstar palettes can theme the same component tree at runtime through
+  validated semantic tokens, without arbitrary CSS or company-specific component branches.
+- A signed-in local user can browse authorized folders and Pages, open a Page, read sanitized
+  Markdown, and inspect visible provenance; deny, missing, empty, loading, and backend-failure
+  states are intentional and tested.
+- Browser-delivered code and responses do not contain the backend bearer token, and the web
+  application does not reimplement Brain authorization decisions.
+- Accessibility checks, focused browser smoke coverage, quality checks, production builds,
+  and Compose health checks pass.
 
 ## Explicitly Deferred
 
-- Brain-owned schedules, autonomous agents, Skill execution, automatic semantic merges, and
-  unreviewed writes;
-- shared multi-tenant SaaS provisioning and cross-tenant administration;
-- binary asset delivery, production identity-provider integration, search/chunks/embeddings,
-  the Next.js console, and production deployment;
-- horizontal autoscaling decisions until native async measurements establish per-process
-  capacity and the managed PostgreSQL connection budget is known.
+- Editable organization branding, logo or asset upload, arbitrary customer CSS, and database
+  schema changes for theme storage;
+- Page or Skill editing, version publication, access-policy administration, search UI, and
+  MCP diagnostics;
+- production identity-provider integration, deployment, analytics, and visual page builders;
+- binary Northstar PDFs or brand assets until their generation, licensing, storage, and
+  delivery contract is specified.

@@ -3,21 +3,23 @@ version: 1
 skills:
   - slug: index
     name: Skill Index
-    file: skills/index.md
+    file: skills/index/SKILL.md
     position: 10
+    references:
+      - skills/index/references/governance.md
   - slug: ingest
     name: Ingest
-    file: skills/ingest.md
+    file: skills/ingest/SKILL.md
     position: 20
   - slug: retrieve
     name: Retrieve
-    file: skills/retrieve.md
+    file: skills/retrieve/SKILL.md
     position: 30
   - slug: update
     name: Update
-    file: skills/update.md
+    file: skills/update/SKILL.md
     position: 40
   - slug: lint
     name: Lint
-    file: skills/lint.md
+    file: skills/lint/SKILL.md
     position: 50
