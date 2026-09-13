@@ -642,16 +642,22 @@ client-specific agent files or example corpus:
 content/default/
 ├── manifest.yaml
 └── skills/
-    ├── index.md
-    ├── ingest.md
-    ├── retrieve.md
-    ├── update.md
-    └── lint.md
+    ├── index/
+    │   ├── SKILL.md
+    │   └── references/
+    │       └── governance.md
+    ├── ingest/SKILL.md
+    ├── retrieve/SKILL.md
+    ├── update/SKILL.md
+    └── lint/SKILL.md
 ```
 
-`assets/` is reserved for files served as assets; these Markdown documents are canonical
-seed content, so `content/default/skills/` makes their lifecycle explicit. Packaging and
-Docker builds must include this directory. An explicit `brain-seed-defaults` bootstrap
+Each Skill uses the conventional `<slug>/SKILL.md` layout. `SKILL.md` is the exact executable
+document stored in a SkillVersion; optional `references/` files are validated and packaged
+supporting guidance, not additional database records. `assets/` is reserved for files served
+as assets. These documents are canonical seed content, so `content/default/skills/` makes
+their lifecycle explicit. Python packaging and Docker builds include this directory. An
+explicit `brain-seed-defaults` bootstrap
 command should create deterministic Skill and SkillVersion records for the selected
 Organization, policy and steward. It must be idempotent, must not run implicitly during
 migration or application startup, and must not overwrite a locally edited current version.
@@ -752,7 +758,7 @@ Top-level domain records should carry an `organization_id`.
 
 Knowledge and Skills are organised into hierarchical Folders.
 
-For example:
+The checked-in initial corpus is intentionally text-only and reviewable:
 
 ```text
 Knowledge
@@ -1346,36 +1352,20 @@ For example:
 ```text
 examples/northstar/
 ├── assets/
-│   ├── logo.png
-│   └── brand/
-│       └── README.md
+│   └── README.md
 ├── documents/
 │   ├── company/
-│   │   ├── employee-handbook.pdf
-│   │   ├── company-policies.pdf
-│   │   └── team-and-roles.pdf
-│   ├── finance/
-│   │   ├── expenses-policy.pdf
-│   │   └── purchasing-policy.pdf
-│   ├── operations/
-│   │   ├── project-delivery-handbook.pdf
-│   │   └── supplier-onboarding.pdf
+│   │   ├── investment-team.md
+│   │   └── operating-partner.md
 │   ├── people/
-│   │   ├── parental-leave.pdf
-│   │   └── new-starter-guide.pdf
-│   └── sales/
-│       ├── sales-playbook.pdf
-│       └── pricing-guide.pdf
-│
+│   │   └── alex-rowan.md
+│   └── portfolio/
+│       ├── orion-investment-memo.md
+│       ├── orion-operating-update.md
+│       └── orion-committee-notes.md
 ├── skills/
-│   ├── ingest.md
-│   ├── search.md
-│   ├── retrieve.md
-│   ├── update.md
-│   ├── index.md
-│   ├── brand.md
-│   └── voice.md
-│
+│   ├── brand/SKILL.md
+│   └── voice/SKILL.md
 └── seed/
     └── manifest.yaml
 ```
@@ -1385,9 +1375,15 @@ should cover the company, investment approach, portfolio operations, team, and p
 Team structure should initially be represented as knowledge rather than introducing a
 special-purpose HR schema.
 
-Brand and voice Skills may reference the fictional logo, palette, and example document
-layouts. Brain should preserve those assets as governed Sources and later expose them to
-MCP clients through a documented resource or URL contract.
+The seed manifest owns stable identity keys, relationships, ordering, provenance, and paths
+to exact source/PageVersion Markdown. `brain-seed-northstar` consumes it deterministically;
+the example Skills are illustrative content and are not inserted as production defaults.
+Binary assets remain deferred until their generation, licensing, storage, and delivery
+contract is explicit.
+
+`tests/fixtures/dummy/` is a separate, deliberately tiny provider-neutral content fixture
+for unit and transport tests. It is not a database seed, production default, or customer
+example and must remain synthetic and text-only unless a focused test documents otherwise.
 
 The corpus should eventually contain overlapping, evolving and occasionally conflicting information.
 

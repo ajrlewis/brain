@@ -34,6 +34,10 @@ DATABASE_URL=postgresql+psycopg://brain:brain@localhost:5432/brain \
   UV_CACHE_DIR="$PWD/.uv-cache" uv run brain-seed-northstar
 ```
 
+The command reads `examples/northstar/seed/manifest.yaml` plus its referenced UTF-8
+documents. It performs no downloads and can be rerun without duplicating identities,
+versions, or provenance.
+
 Seed the repository-owned default Skill bundle explicitly after resolving deployment
 identities (these selectors match Northstar):
 
@@ -47,7 +51,8 @@ DATABASE_URL=postgresql+psycopg://brain:brain@localhost:5432/brain \
 ```
 
 Add `--review` to print a read-only unified diff between bundled and deployed current
-documents before proposing a bundled upgrade.
+`SKILL.md` documents before proposing a bundled upgrade. The conventional Skill directories
+and supporting references are included in the `brain-db` wheel and Docker build.
 
 ## Quality
 

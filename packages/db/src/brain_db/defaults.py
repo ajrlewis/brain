@@ -41,10 +41,21 @@ class DefaultSkill:
     name: str
     position: int
     content_markdown: str
+    references: tuple["BundleReference", ...] = ()
 
     @property
     def content_hash(self) -> str:
         return sha256(self.content_markdown.encode()).hexdigest()
+
+
+@dataclass(frozen=True)
+class BundleReference:
+    path: str
+    content: bytes
+
+    @property
+    def content_hash(self) -> str:
+        return sha256(self.content).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -71,17 +82,37 @@ def model_table(model: type[Base]) -> Table:
 
 
 def default_bundle_root() -> Path:
-    return Path(__file__).resolve().parents[4] / "content" / "default"
+    repository_bundle = Path(__file__).resolve().parents[4] / "content" / "default"
+    if repository_bundle.is_dir():
+        return repository_bundle
+    return Path(__file__).resolve().parent / "_bundles" / "default"
+
+
+def _bundle_file(bundle_root: Path, relative_file: str, label: str) -> Path:
+    if not relative_file or Path(relative_file).is_absolute():
+        raise ValueError(f"{label} must be a relative path within the bundle")
+    resolved_root = bundle_root.resolve()
+    path = (resolved_root / relative_file).resolve()
+    if not path.is_relative_to(resolved_root):
+        raise ValueError(f"{label} must stay within the bundle")
+    if not path.is_file():
+        raise ValueError(f"{label} does not exist: {relative_file}")
+    return path
 
 
 def load_default_bundle(root: Path | None = None) -> tuple[DefaultSkill, ...]:
     bundle_root = root or default_bundle_root()
-    loaded: object = yaml.safe_load((bundle_root / "manifest.yaml").read_text())
+    try:
+        loaded: object = yaml.safe_load((bundle_root / "manifest.yaml").read_text())
+    except (OSError, yaml.YAMLError) as error:
+        raise ValueError("Default Skill manifest is not readable valid YAML") from error
     if not isinstance(loaded, dict):
         raise ValueError("Default Skill manifest must declare version 1")
     manifest = cast(dict[object, object], loaded)
     if manifest.get("version") != 1:
         raise ValueError("Default Skill manifest must declare version 1")
+    if manifest.get("bundle") != "brain-default-skills":
+        raise ValueError("Default Skill manifest has an invalid bundle identity")
     entries = manifest.get("skills")
     if not isinstance(entries, list):
         raise ValueError("Default Skill manifest must contain a skills list")
@@ -102,10 +133,14 @@ def load_default_bundle(root: Path | None = None) -> tuple[DefaultSkill, ...]:
             raise ValueError("Default Skill manifest identities must be strings")
         if not isinstance(relative_file, str) or not isinstance(position, int):
             raise ValueError("Default Skill manifest file and position are invalid")
-        path = (bundle_root / relative_file).resolve()
-        if bundle_root.resolve() not in path.parents:
-            raise ValueError("Default Skill file must stay within the bundle")
-        markdown = path.read_text()
+        expected_file = f"skills/{slug}/SKILL.md"
+        if relative_file != expected_file:
+            raise ValueError(f"Default Skill '{slug}' must use {expected_file}")
+        path = _bundle_file(bundle_root, relative_file, "Default Skill file")
+        try:
+            markdown = path.read_bytes().decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ValueError(f"Default Skill '{slug}' must be UTF-8 Markdown") from error
         frontmatter = parse_skill_document(markdown)
         if frontmatter["name"] != slug:
             raise ValueError(f"Default Skill '{slug}' frontmatter name does not match")
@@ -113,7 +148,22 @@ def load_default_bundle(root: Path | None = None) -> tuple[DefaultSkill, ...]:
         unknown = set(tools) - AVAILABLE_TOOLS
         if unknown:
             raise ValueError(f"Default Skill '{slug}' advertises unavailable tools: {unknown}")
-        skills.append(DefaultSkill(slug, name, position, markdown))
+        raw_references = entry.get("references", [])
+        if not isinstance(raw_references, list):
+            raise ValueError(f"Default Skill '{slug}' references must be a list of paths")
+        reference_values = cast(list[object], raw_references)
+        if any(not isinstance(reference, str) for reference in reference_values):
+            raise ValueError(f"Default Skill '{slug}' references must be a list of paths")
+        references: list[BundleReference] = []
+        expected_reference_root = f"skills/{slug}/references/"
+        for reference in cast(list[str], reference_values):
+            if not reference.startswith(expected_reference_root):
+                raise ValueError(f"Default Skill '{slug}' reference is outside its references/")
+            reference_path = _bundle_file(bundle_root, reference, "Default Skill reference")
+            references.append(BundleReference(reference, reference_path.read_bytes()))
+        if len({reference.path for reference in references}) != len(references):
+            raise ValueError(f"Default Skill '{slug}' contains duplicate references")
+        skills.append(DefaultSkill(slug, name, position, markdown, tuple(references)))
         contracts[slug] = frontmatter
     slugs = [skill.slug for skill in skills]
     if len(slugs) != len(set(slugs)) or set(slugs) != {
@@ -124,6 +174,19 @@ def load_default_bundle(root: Path | None = None) -> tuple[DefaultSkill, ...]:
         "lint",
     }:
         raise ValueError("Default Skill manifest must define each canonical Skill exactly once")
+    positions = [skill.position for skill in skills]
+    if positions != sorted(positions) or len(positions) != len(set(positions)):
+        raise ValueError("Default Skill positions must be unique and ordered")
+    declared_files = {f"skills/{skill.slug}/SKILL.md" for skill in skills} | {
+        reference.path for skill in skills for reference in skill.references
+    }
+    actual_files = {
+        path.relative_to(bundle_root).as_posix()
+        for path in (bundle_root / "skills").rglob("*")
+        if path.is_file()
+    }
+    if actual_files != declared_files:
+        raise ValueError("Default Skill bundle contains undeclared or missing files")
     index = next(skill for skill in skills if skill.slug == "index")
     for slug in set(slugs) - {"index"}:
         if f"`{slug}`" not in index.content_markdown:

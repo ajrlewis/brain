@@ -20,3 +20,6 @@ brain-seed-defaults = "brain_db.defaults:run"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.hooks.custom]
+path = "hatch_build.py"

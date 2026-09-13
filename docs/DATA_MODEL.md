@@ -157,3 +157,15 @@ token count, and content hash. Every embedding records provider, model, dimensio
 the Chunk it represents. Derived rows have no independent policy or stewardship and may
 be deleted and rebuilt without changing canonical records or current-version pointers.
 Authorization is inherited from the owning Page at query time.
+
+## Repository fixture boundaries
+
+`content/default` is repository-owned production seed input: only each conventional
+`<slug>/SKILL.md` becomes immutable SkillVersion content. Supporting references are packaged
+but are not database rows. `examples/northstar` is a wholly fictional, deterministic local
+example whose manifest is consumed by the explicit Northstar seed command. Its source files
+are reviewable seed inputs; after seeding, PostgreSQL is the local runtime state and reruns
+only perform conflict-safe inserts and stable current-pointer reconciliation.
+
+`tests/fixtures/dummy` is content-only test input. It is never seeded automatically and is
+not a production default or a representation of customer data.

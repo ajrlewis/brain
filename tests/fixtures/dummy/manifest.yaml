@@ -1,0 +1,8 @@
+bundle: brain-dummy-test-content
+version: 1
+documents:
+  - slug: sample-page
+    file: documents/sample-page.md
+skills:
+  - slug: sample-skill
+    file: skills/sample-skill/SKILL.md

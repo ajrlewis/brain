@@ -1,0 +1,145 @@
+bundle: northstar
+version: 1
+organizations:
+  - key: organization:northstar
+    slug: northstar
+    name: Northstar Equity Partners
+  - key: organization:harbour
+    slug: harbour
+    name: Harbour Example Holdings
+principals:
+  - key: principal:alex
+    organization: organization:northstar
+    kind: user
+    external_subject: northstar-alex
+    display_name: Alex Rowan
+  - key: principal:cortex
+    organization: organization:northstar
+    kind: agent
+    external_subject: northstar-cortex
+    display_name: Cortex Ingestion Agent
+  - key: principal:harbour
+    organization: organization:harbour
+    kind: user
+    external_subject: harbour-user
+    display_name: Harbour User
+groups:
+  - key: group:investment
+    organization: organization:northstar
+    slug: investment-team
+    name: Investment Team
+  - key: group:operations
+    organization: organization:northstar
+    slug: portfolio-operations
+    name: Portfolio Operations
+memberships:
+  - organization: organization:northstar
+    group: group:investment
+    principal: principal:alex
+  - organization: organization:northstar
+    group: group:operations
+    principal: principal:cortex
+policies:
+  - key: policy:organization-wide
+    organization: organization:northstar
+    name: Northstar organization-wide
+  - key: policy:deal-team
+    organization: organization:northstar
+    name: Investment team only
+policy_groups:
+  - organization: organization:northstar
+    policy: policy:deal-team
+    group: group:investment
+folders:
+  - key: folder:people
+    organization: organization:northstar
+    slug: people
+    name: People
+    policy: policy:organization-wide
+    position: 10
+  - key: folder:portfolio
+    organization: organization:northstar
+    slug: portfolio
+    name: Portfolio
+    policy: policy:deal-team
+    position: 20
+sources:
+  - key: source:orion-memo
+    organization: organization:northstar
+    source_type: investment-memo
+    title: Project Orion investment memo
+    canonical_uri: northstar://orion/memo
+    external_id: orion-memo-2026
+    policy: policy:deal-team
+    document: documents/portfolio/orion-investment-memo.md
+    metadata: {format: synthetic-markdown}
+    provenance: {retrieved_by: cortex, fictional: true}
+  - key: source:orion-update
+    organization: organization:northstar
+    source_type: portfolio-update
+    title: Project Orion operating update
+    canonical_uri: northstar://orion/update
+    external_id: orion-update-q3-2026
+    policy: policy:organization-wide
+    document: documents/portfolio/orion-operating-update.md
+    metadata: {quarter: Q3}
+    provenance: {retrieved_by: cortex, fictional: true}
+  - key: source:committee-notes
+    organization: organization:northstar
+    source_type: committee-notes
+    title: Orion committee notes
+    external_id: orion-ic-2026
+    policy: policy:deal-team
+    document: documents/portfolio/orion-committee-notes.md
+    metadata: {}
+    provenance: {fictional: true}
+pages:
+  - key: page:alex-rowan
+    organization: organization:northstar
+    slug: alex-rowan
+    title: Alex Rowan
+    folder: folder:people
+    policy: policy:organization-wide
+    versions:
+      - key: page:alex-rowan:version:1
+        file: documents/people/alex-rowan.md
+  - key: page:investment-team
+    organization: organization:northstar
+    slug: investment-team
+    title: Investment Team
+    folder: folder:people
+    policy: policy:organization-wide
+    versions:
+      - key: page:investment-team:version:1
+        file: documents/company/investment-team.md
+  - key: page:operating-partner
+    organization: organization:northstar
+    slug: operating-partner
+    title: Operating Partner
+    folder: folder:people
+    policy: policy:organization-wide
+    versions:
+      - key: page:operating-partner:version:1
+        file: documents/company/operating-partner.md
+  - key: page:project-orion
+    organization: organization:northstar
+    slug: project-orion
+    title: Project Orion
+    folder: folder:portfolio
+    policy: policy:deal-team
+    versions:
+      - key: page:project-orion:version:1
+        file: documents/portfolio/orion-investment-memo.md
+        provenance:
+          - source: source:orion-memo
+            relationship: derived_from
+            metadata: {fact: revenue}
+      - key: page:project-orion:version:2
+        file: documents/portfolio/orion-operating-update.md
+        provenance:
+          - source: source:orion-update
+            relationship: derived_from
+            metadata: {supersedes: £42m}
+          - source: source:committee-notes
+            relationship: corroborated_by
+            metadata: {}
