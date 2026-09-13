@@ -90,6 +90,34 @@ acquisition and statement timeouts and returned controlled exceptions. These loc
 measurements verify bounded concurrency behavior; they are not a production capacity or
 400-concurrent-user claim.
 
+## Web console
+
+```bash
+npm install
+npm run web:contracts:check
+npm run web:lint
+npm run web:typecheck
+npm run web:test
+npm run web:build
+npm run test:e2e --workspace @brain/web
+```
+
+`web:test` runs Vitest unit/component and mocked server-transport tests. The Playwright browser
+integration expects a running, migrated, Northstar-seeded Compose stack. Prepare it with:
+
+```bash
+docker compose up -d --build
+docker compose exec -T api brain-seed-northstar
+npx playwright install chromium
+npm run test:e2e --workspace @brain/web
+```
+
+Contract generation,
+lint, type checking, and 11 unit/component tests were verified on 2026-09-13. Production
+compilation, type checking, route generation, and optimization completed in Docker; a later
+repeat encountered a native Node/Docker Desktop crash while packaging, so Compose health and
+the browser flow were not recorded as verified in this environment.
+
 ## PostgreSQL And Docker
 
 The Compose model and application image build were verified on 2026-09-13:

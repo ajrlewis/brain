@@ -5,12 +5,21 @@ Brain is a self-hosted knowledge and capability store for AI agents.
 ## Implementation status
 
 The repository implements its persistent identity/access and first governed knowledge
-slice. PostgreSQL stores Page folders, Sources, Pages, immutable PageVersions, and
+slice plus a read-only Next.js enterprise console in `apps/web`. PostgreSQL stores Page folders, Sources, Pages, immutable PageVersions, and
 access-filtered provenance. Shared application services expose equivalent create/read
 operations through FastAPI and FastMCP, and a deterministic Northstar seed demonstrates
 versioned synthetic knowledge. It also stores validated immutable Skills, exposes bounded
 authorized inventories, and explicitly seeds five repository-owned defaults. Search, chunks,
 embeddings, document retrieval/parsing, and production identity integration remain target state.
+
+The console provides local sign-in, three-pane Page/content/provenance browsing, Skills and
+reference inventories, runtime Brain/Northstar themes, and sanitized Markdown. It calls the
+public HTTP API from Server Components, so `LOCAL_BEARER_TOKEN` is never delivered to browser
+JavaScript. FastAPI's generated OpenAPI document deterministically generates the checked-in
+Zod validators; `npm run web:contracts:check` detects drift.
+
+For local Docker use, copy `.env.example`, run `docker compose up -d --build`, and open
+`http://localhost:3000`. The disposable defaults are `brain-admin` / `brain-local-dev`.
 
 It provides a persistent, structured place for an organisation to store:
 
