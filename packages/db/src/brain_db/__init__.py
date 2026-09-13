@@ -10,9 +10,11 @@ from brain_db.models import (
     PageVersion,
     PageVersionSource,
     Principal,
+    Skill,
+    SkillVersion,
     Source,
 )
-from brain_db.repositories import KnowledgeRepository, Repository
+from brain_db.repositories import KnowledgeRepository, Repository, SkillRepository
 from brain_db.session import SessionFactory, create_engine, create_session_factory, session_scope
 
 __all__ = [
@@ -31,6 +33,9 @@ __all__ = [
     "Principal",
     "Repository",
     "SessionFactory",
+    "Skill",
+    "SkillRepository",
+    "SkillVersion",
     "Source",
     "create_engine",
     "create_session_factory",

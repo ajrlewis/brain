@@ -6,7 +6,12 @@ import pytest
 from sqlalchemy.orm import Session
 
 from brain_auth import AuthContext, AuthorizationDenied
-from brain_core import DuplicatePageContent, InvalidKnowledgeReference, KnowledgeNotFound
+from brain_core import (
+    DuplicatePageContent,
+    InvalidKnowledgeReference,
+    KnowledgeNotFound,
+    VersionConflict,
+)
 from brain_core.knowledge import KnowledgeService
 from brain_db import Folder, Page, PageVersion, PageVersionSource, Source
 from brain_schemas import FolderCreate, PageCreate, PageVersionCreate, ProvenanceInput, SourceCreate
@@ -21,9 +26,9 @@ RESTRICTED_POLICY = UUID("40000000-0000-0000-0000-000000000002")
 
 class FakeKnowledgeRepository:
     policies: dict[UUID, set[UUID]]
-    folders: dict[UUID, Folder]
+    folder_records: dict[UUID, Folder]
     sources: dict[UUID, Source]
-    pages: dict[UUID, Page]
+    page_records: dict[UUID, Page]
     page_versions: list[PageVersion]
     links: list[PageVersionSource]
 
@@ -33,9 +38,9 @@ class FakeKnowledgeRepository:
     @classmethod
     def reset(cls) -> None:
         cls.policies = {OPEN_POLICY: set(), RESTRICTED_POLICY: {GROUP}}
-        cls.folders = {}
+        cls.folder_records = {}
         cls.sources = {}
-        cls.pages = {}
+        cls.page_records = {}
         cls.page_versions = []
         cls.links = []
 
@@ -51,12 +56,19 @@ class FakeKnowledgeRepository:
         return organization_id == ORG and principal_id == PRINCIPAL
 
     def get_folder(self, organization_id: UUID, folder_id: UUID) -> Folder | None:
-        folder = self.folders.get(folder_id)
+        folder = self.folder_records.get(folder_id)
         return folder if folder is not None and folder.organization_id == organization_id else None
 
     def add_folder(self, folder: Folder) -> None:
         self._generated(folder)
-        self.folders[folder.id] = folder
+        self.folder_records[folder.id] = folder
+
+    def folders(self, organization_id: UUID) -> list[Folder]:
+        return [
+            folder
+            for folder in self.folder_records.values()
+            if folder.organization_id == organization_id
+        ]
 
     def get_source(self, organization_id: UUID, source_id: UUID) -> Source | None:
         source = self.sources.get(source_id)
@@ -66,13 +78,33 @@ class FakeKnowledgeRepository:
         self._generated(source)
         self.sources[source.id] = source
 
+    def source_inventory(self, organization_id: UUID) -> list[Source]:
+        return [
+            source for source in self.sources.values() if source.organization_id == organization_id
+        ]
+
     def get_page(self, organization_id: UUID, page_id: UUID, *, lock: bool = False) -> Page | None:
-        page = self.pages.get(page_id)
+        page = self.page_records.get(page_id)
         return page if page is not None and page.organization_id == organization_id else None
 
     def add_page(self, page: Page) -> None:
         self._generated(page)
-        self.pages[page.id] = page
+        self.page_records[page.id] = page
+
+    def pages(self, organization_id: UUID) -> list[Page]:
+        return [
+            page
+            for page in self.page_records.values()
+            if page.organization_id == organization_id and page.current_version_id is not None
+        ]
+
+    def page_inventory(self, organization_id: UUID) -> list[tuple[Page, UUID, str]]:
+        return [
+            (page, version.id, version.content_hash)
+            for page in self.pages(organization_id)
+            for version in self.page_versions
+            if version.id == page.current_version_id
+        ]
 
     def add_version(self, version: PageVersion) -> None:
         version.id = uuid4()
@@ -148,6 +180,7 @@ def test_folder_and_source_create_read_and_reference_failures(
         ),
     )
     assert service.get_source(context, source.id).metadata == {"format": "markdown"}
+    assert [item.id for item in service.list_sources(context)] == [source.id]
 
     with pytest.raises(InvalidKnowledgeReference):
         service.create_folder(
@@ -178,6 +211,25 @@ def test_folder_and_source_create_read_and_reference_failures(
 def test_page_versions_authorization_and_hidden_provenance(
     service: KnowledgeService, context: AuthContext
 ) -> None:
+    parent = service.create_folder(
+        context,
+        FolderCreate(
+            slug="portfolio",
+            name="Portfolio",
+            access_policy_id=OPEN_POLICY,
+            steward_id=PRINCIPAL,
+        ),
+    )
+    folder = service.create_folder(
+        context,
+        FolderCreate(
+            slug="active",
+            name="Active",
+            parent_id=parent.id,
+            access_policy_id=OPEN_POLICY,
+            steward_id=PRINCIPAL,
+        ),
+    )
     source = service.create_source(
         context,
         SourceCreate(
@@ -194,30 +246,68 @@ def test_page_versions_authorization_and_hidden_provenance(
         content_markdown="# Orion\n\nInitial fact.",
         access_policy_id=OPEN_POLICY,
         steward_id=PRINCIPAL,
+        folder_id=folder.id,
         sources=[ProvenanceInput(source_id=source.id, relationship="derived_from")],
     )
     page = service.create_page(context, request)
     assert page.current_version.version == 1
     assert len(page.current_version.provenance) == 1
+    assert service.list_pages(context)[0].path == "/portfolio/active/orion"
+    assert service.get_page_by_path(context, "/portfolio/active/orion").id == page.id
+    with pytest.raises(KnowledgeNotFound):
+        service.get_page_by_path(context, "/missing")
 
     updated = service.create_page_version(
         context,
         page.id,
         PageVersionCreate(
+            expected_current_version_id=page.current_version.id,
             content_markdown="# Orion\n\nSuperseding fact.",
             sources=[ProvenanceInput(source_id=source.id, relationship="corroborated_by")],
         ),
     )
     assert updated.current_version.version == 2
     assert [version.version for version in updated.versions] == [1, 2]
+
+    with pytest.raises(VersionConflict):
+        service.create_page_version(
+            context,
+            page.id,
+            PageVersionCreate(
+                expected_current_version_id=page.current_version.id,
+                content_markdown="# Orion\n\nStale edit.",
+            ),
+        )
+    assert len(FakeKnowledgeRepository.page_versions) == 2
     assert updated.versions[0].content_markdown == request.content_markdown
 
     with pytest.raises(DuplicatePageContent):
         service.create_page_version(
             context,
             page.id,
-            PageVersionCreate(content_markdown="# Orion\n\nSuperseding fact."),
+            PageVersionCreate(
+                expected_current_version_id=updated.current_version.id,
+                content_markdown="# Orion\n\nSuperseding fact.",
+            ),
         )
+
+    duplicate = service.create_page(
+        context,
+        PageCreate(
+            slug="orion-copy",
+            title="Orion copy",
+            content_markdown=updated.current_version.content_markdown,
+            access_policy_id=OPEN_POLICY,
+            steward_id=PRINCIPAL,
+        ),
+    )
+    exact_hashes = [
+        item.content_hash
+        for item in service.list_pages(context)
+        if item.id in {page.id, duplicate.id}
+    ]
+    assert len(exact_hashes) == 2
+    assert len(set(exact_hashes)) == 1
 
     FakeKnowledgeRepository.sources[source.id].access_policy_id = RESTRICTED_POLICY
     outsider = AuthContext(organization_id=ORG, principal_id=PRINCIPAL, group_ids=frozenset())
@@ -226,7 +316,9 @@ def test_page_versions_authorization_and_hidden_provenance(
     with pytest.raises(AuthorizationDenied):
         service.get_source(outsider, source.id)
 
-    FakeKnowledgeRepository.pages[page.id].access_policy_id = RESTRICTED_POLICY
+    FakeKnowledgeRepository.page_records[page.id].access_policy_id = RESTRICTED_POLICY
+    FakeKnowledgeRepository.page_records[duplicate.id].access_policy_id = RESTRICTED_POLICY
+    assert service.list_pages(outsider) == []
     with pytest.raises(AuthorizationDenied):
         service.get_page(outsider, page.id)
     with pytest.raises(AuthorizationDenied):
@@ -234,6 +326,62 @@ def test_page_versions_authorization_and_hidden_provenance(
             AuthContext(organization_id=OTHER_ORG, principal_id=PRINCIPAL, group_ids=frozenset()),
             page.id,
         )
+
+
+def test_large_inventory_does_not_read_page_version_bodies(
+    service: KnowledgeService,
+    context: AuthContext,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = datetime.now(UTC)
+    for index in range(500):
+        page_id = uuid4()
+        version_id = uuid4()
+        FakeKnowledgeRepository.page_records[page_id] = Page(
+            id=page_id,
+            organization_id=ORG,
+            slug=f"page-{index}",
+            title=f"Page {index}",
+            current_version_id=version_id,
+            access_policy_id=OPEN_POLICY,
+            position=index,
+            steward_id=PRINCIPAL,
+            created_by_id=PRINCIPAL,
+            updated_by_id=PRINCIPAL,
+            created_at=now,
+            updated_at=now,
+        )
+        FakeKnowledgeRepository.page_versions.append(
+            PageVersion(
+                id=version_id,
+                organization_id=ORG,
+                page_id=page_id,
+                version=1,
+                content_markdown=f"# Page {index}\n\nLarge body that inventory must not return.",
+                content_hash=f"{index:064x}",
+                created_by_id=PRINCIPAL,
+                created_at=now,
+            )
+        )
+
+    def fail_if_versions_are_loaded(
+        repository: FakeKnowledgeRepository, page_id: UUID
+    ) -> list[PageVersion]:
+        raise AssertionError("inventory loaded immutable PageVersion bodies")
+
+    monkeypatch.setattr(FakeKnowledgeRepository, "versions", fail_if_versions_are_loaded)
+
+    inventory = service.list_pages(context)
+
+    assert len(inventory) == 500
+    assert inventory[0].model_dump().keys() == {
+        "id",
+        "slug",
+        "title",
+        "path",
+        "current_version_id",
+        "content_hash",
+    }
 
 
 def test_page_creation_rejects_wrong_tenant_references(

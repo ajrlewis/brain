@@ -1,8 +1,8 @@
 # Data Model
 
 This document is the contract for Brain's initial identity, access, knowledge, and Skill
-model. The migrations implement the identity/access and knowledge tables identified
-below; Skill tables are specified for a subsequent vertical slice.
+model. The migrations implement the identity/access, knowledge, and Skill tables identified
+below.
 
 PostgreSQL UUID primary keys are stable public identifiers. Timestamps are timezone-aware.
 Tenant-owned uniqueness and foreign keys include `organization_id` so records from two
@@ -127,7 +127,7 @@ same Organization. Relationship is a non-blank vocabulary such as `derived_from`
 `corroborated_by`. Deleting canonical versions or Sources is restricted; links are part
 of retained provenance.
 
-## Skills (specified, not yet migrated)
+## Skills (implemented)
 
 ### Skill
 

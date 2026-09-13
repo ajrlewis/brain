@@ -3,6 +3,7 @@ name = "brain-mcp"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
+  "anyio>=4.10,<5",
   "brain-auth",
   "brain-core",
   "brain-schemas",

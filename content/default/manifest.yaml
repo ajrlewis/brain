@@ -1,0 +1,23 @@
+bundle: brain-default-skills
+version: 1
+skills:
+  - slug: index
+    name: Skill Index
+    file: skills/index.md
+    position: 10
+  - slug: ingest
+    name: Ingest
+    file: skills/ingest.md
+    position: 20
+  - slug: retrieve
+    name: Retrieve
+    file: skills/retrieve.md
+    position: 30
+  - slug: update
+    name: Update
+    file: skills/update.md
+    position: 40
+  - slug: lint
+    name: Lint
+    file: skills/lint.md
+    position: 50

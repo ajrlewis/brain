@@ -9,7 +9,7 @@ safe to use elsewhere.
 
 ## Workspace
 
-Verified on 2026-09-12:
+Verified on 2026-09-13:
 
 ```bash
 UV_CACHE_DIR="$PWD/.uv-cache" uv lock
@@ -18,7 +18,7 @@ UV_CACHE_DIR="$PWD/.uv-cache" uv sync --frozen --all-packages
 
 ## Applications
 
-Verified on 2026-09-12. The API health response was queried at
+Verified on 2026-09-13. The API health response was queried at
 `http://127.0.0.1:8000/health`, MCP Streamable HTTP is mounted at
 `http://127.0.0.1:8000/mcp/`, and the MCP command reached its stdio serving loop.
 
@@ -34,9 +34,24 @@ DATABASE_URL=postgresql+psycopg://brain:brain@localhost:5432/brain \
   UV_CACHE_DIR="$PWD/.uv-cache" uv run brain-seed-northstar
 ```
 
+Seed the repository-owned default Skill bundle explicitly after resolving deployment
+identities (these selectors match Northstar):
+
+```bash
+DATABASE_URL=postgresql+psycopg://brain:brain@localhost:5432/brain \
+  UV_CACHE_DIR="$PWD/.uv-cache" uv run brain-seed-defaults \
+  --organization northstar \
+  --policy "Northstar organization-wide" \
+  --steward northstar-alex \
+  --audit-principal northstar-cortex
+```
+
+Add `--review` to print a read-only unified diff between bundled and deployed current
+documents before proposing a bundled upgrade.
+
 ## Quality
 
-Verified on 2026-09-12:
+Verified on 2026-09-13:
 
 ```bash
 UV_CACHE_DIR="$PWD/.uv-cache" uv run ruff check .
@@ -45,8 +60,8 @@ UV_CACHE_DIR="$PWD/.uv-cache" uv run pyright
 UV_CACHE_DIR="$PWD/.uv-cache" uv run pytest -m 'not integration' --cov --cov-report=term-missing
 ```
 
-The last command ran 29 tests with 93%+ branch-aware coverage. The dependency-backed
-integration suite is intentionally separate:
+The last command ran 45 tests with 90%+ branch-aware coverage. The dependency-backed
+integration suite is intentionally separate and ran 6 PostgreSQL tests:
 
 ```bash
 TEST_DATABASE_URL=postgresql://brain:brain@localhost:5432/brain \
@@ -55,7 +70,7 @@ TEST_DATABASE_URL=postgresql://brain:brain@localhost:5432/brain \
 
 ## PostgreSQL And Docker
 
-The Compose model and application image build were verified on 2026-09-12:
+The Compose model and application image build were verified on 2026-09-13:
 
 ```bash
 docker compose config
@@ -103,8 +118,8 @@ To erase local Brain database data, use `docker compose down -v`. This permanent
 the disposable Compose volume.
 
 The database lifecycle, clean Alembic upgrade, model/migration comparison, integration
-tests, one-shot migration dependency, healthy API, and image build were verified on Docker
-Desktop 4.90.0 using
+tests, one-shot migration dependency, healthy API, and image build were verified on
+2026-09-13 with Docker Desktop 4.90.0 using
 host port 55432 because a native PostgreSQL instance occupies 5432. Docker Desktop 20.10.8
 had previously failed during `initdb` with `Cannot allocate memory`. CI also performs the
 extension creation and integration test on Linux.

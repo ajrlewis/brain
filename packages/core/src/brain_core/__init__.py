@@ -6,12 +6,21 @@ from brain_core.knowledge import (
     KnowledgeConflict,
     KnowledgeNotFound,
     KnowledgeService,
+    VersionConflict,
     create_knowledge_service,
 )
 from brain_core.settings import Settings
+from brain_core.skills import (
+    DuplicateSkillContent,
+    SkillConflict,
+    SkillNotFound,
+    SkillService,
+    create_skill_service,
+)
 
 __all__ = [
     "DuplicatePageContent",
+    "DuplicateSkillContent",
     "HealthService",
     "IdentityService",
     "InvalidKnowledgeReference",
@@ -19,6 +28,11 @@ __all__ = [
     "KnowledgeNotFound",
     "KnowledgeService",
     "Settings",
+    "SkillConflict",
+    "SkillNotFound",
+    "SkillService",
+    "VersionConflict",
     "create_knowledge_service",
     "create_local_authenticator",
+    "create_skill_service",
 ]

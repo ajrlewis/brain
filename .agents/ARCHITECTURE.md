@@ -1,6 +1,10 @@
 # Architecture
 
-`README.md` is the canonical target-state specification. The implemented system is a Python 3.13 uv workspace with HTTP and MCP interfaces over shared application services, a provider-neutral authorization context, and PostgreSQL identity/access plus governed knowledge persistence managed by Alembic. Skill and search behavior remains target state unless explicitly identified below.
+`README.md` is the canonical target-state specification. The implemented system is a Python
+3.13 uv workspace with HTTP and MCP interfaces over shared application services, a
+provider-neutral authorization context, and PostgreSQL identity/access plus governed
+knowledge and Skill persistence managed by Alembic. Search remains target state unless
+explicitly identified below.
 
 ## Purpose And Boundary
 
@@ -15,10 +19,10 @@ MCP ──────┘                                  └─────> p
 ```
 
 - `apps/api` and `apps/mcp` are thin transport boundaries over shared services.
-- `packages/core` owns typed settings plus shared health, identity, and knowledge application services.
+- `packages/core` owns typed settings plus shared health, identity, knowledge, and Skill application services.
 - `packages/schemas` owns explicit transport-neutral public request/response contracts.
 - `packages/auth` owns immutable `AuthContext`, local bearer authentication, and the initial same-tenant/any-group policy evaluator.
-- `packages/db` owns declarative metadata, identity/access and knowledge models, engine/session factories, caller-owned repositories, Alembic, and the idempotent Northstar seed.
+- `packages/db` owns declarative metadata, identity/access, knowledge, and Skill models, engine/session factories, caller-owned repositories, Alembic, and explicit idempotent seeds.
 - `packages/ai` and `packages/search` remain installable boundaries with implementations deferred.
 
 Applications may depend on packages; packages must not depend on applications. HTTP and MCP must not independently implement domain rules.
@@ -35,10 +39,17 @@ create Pages with extracted Markdown, append immutable PageVersions, and read Pa
 only the provenance Sources visible to the caller. Both transports invoke the same
 `KnowledgeService`; Cortex remains responsible for retrieval and extraction.
 
+The same interfaces create, list, and read Skills and append validated immutable
+SkillVersions through `SkillService`. Version mutations require the current version ID
+observed during review; a stale Page or Skill mutation conflicts before history or the
+current pointer changes. Page inventory exposes authorized stable folder/Page paths and
+current hashes. Skill inventory exposes authorized stable slugs and current hashes.
+
 The initial migration creates Organization, Principal, Group, GroupMembership,
 AccessPolicy, and AccessPolicyGroup. Composite tenant foreign keys prevent cross-tenant
 links. The second migration adds Page folders, Sources, Pages, immutable PageVersions,
-and retained PageVersionSource provenance with same-tenant/current-version constraints.
+and retained PageVersionSource provenance. The third adds Skills and immutable
+SkillVersions. Both parent/version pairs enforce same-tenant/current-version constraints.
 The application process never migrates implicitly: Compose orders PostgreSQL
 health, one-shot migration completion, then API startup.
 
@@ -67,11 +78,17 @@ Use a provider-neutral `AuthContext` containing organization, principal, and gro
 
 The implemented stack is Python 3.13+, uv, FastAPI, FastMCP, Pydantic v2, SQLAlchemy 2.x, Alembic, psycopg, pgvector, PostgreSQL 17 with pgvector, pytest, Ruff, Pyright, Docker, and GitHub Actions.
 
-Database access currently uses synchronous SQLAlchemy sessions and psycopg. FastAPI's
-synchronous handlers run in worker threads; synchronous FastMCP tools can occupy their
-request execution while database work completes. Any future async migration must cover
-the shared service/session boundary consistently rather than creating divergent HTTP and
-MCP persistence paths.
+Database access currently uses synchronous SQLAlchemy sessions and psycopg. The supported
+initial deployment is one Organization with roughly 400 potential users. FastAPI's
+synchronous handlers run in worker threads, and FastMCP database tools explicitly offload
+the same synchronous services so neither transport blocks its event loop. Each operation
+owns a session and the database pool bounds active work.
+
+This is the concrete initial concurrency decision, not a permanent rejection of async.
+Before high-fanout linting, or when load tests show worker/database-pool saturation, migrate
+the complete shared session, repository, and service boundary to SQLAlchemy `AsyncSession`
+with psycopg async. Do not convert isolated handlers or repositories: mixed blocking and
+async persistence would retain blocking while creating divergent behavior.
 
 The service should remain containerizable and host-independent even though production is intended for Vercel with managed PostgreSQL. Repository code and migrations are canonical; hosted systems are authoritative only for live deployment and database state. Deployment, production data access or mutation, hosted configuration changes, and secret changes require explicit maintainer authorization.
 

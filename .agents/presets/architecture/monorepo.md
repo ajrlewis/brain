@@ -1,6 +1,8 @@
 # Monorepo Preset
 
-Adopted for Brain's Python monorepo. The persistent identity/access-control foundation implements `apps/api`, `apps/mcp`, and the responsibility-based `packages/` boundaries below; knowledge, Skill, and search behavior remains target state.
+Adopted for Brain's Python monorepo. The identity/access, governed knowledge, and Skill
+persistence slices implement `apps/api`, `apps/mcp`, and the responsibility-based
+`packages/` boundaries below; search behavior remains target state.
 
 ```text
 apps/

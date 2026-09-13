@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from uuid import UUID
 
+from anyio import to_thread
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from fastmcp.server.dependencies import get_http_headers
@@ -20,8 +21,13 @@ from brain_core import (
     KnowledgeNotFound,
     KnowledgeService,
     Settings,
+    SkillConflict,
+    SkillNotFound,
+    SkillService,
+    VersionConflict,
     create_knowledge_service,
     create_local_authenticator,
+    create_skill_service,
 )
 from brain_core.settings import get_settings
 from brain_schemas import (
@@ -29,10 +35,17 @@ from brain_schemas import (
     FolderCreate,
     FolderResponse,
     HealthResponse,
+    InvalidSkillDocument,
     PageCreate,
+    PageInventoryItem,
     PageResponse,
     PageVersionCreate,
+    SkillCreate,
+    SkillInventoryItem,
+    SkillResponse,
+    SkillVersionCreate,
     SourceCreate,
+    SourceInventoryItem,
     SourceResponse,
 )
 
@@ -43,6 +56,7 @@ def create_server(
     health_service: HealthService | None = None,
     identity_service: IdentityService | None = None,
     knowledge_service: KnowledgeService | None = None,
+    skill_service: SkillService | None = None,
     authenticator: LocalBearerAuthenticator | None = None,
 ) -> FastMCP:
     resolved_settings = settings or get_settings()
@@ -52,6 +66,7 @@ def create_server(
     )
     resolved_identity_service = identity_service or IdentityService()
     resolved_knowledge_service = knowledge_service or create_knowledge_service(resolved_settings)
+    resolved_skill_service = skill_service or create_skill_service(resolved_settings)
     resolved_authenticator = authenticator or create_local_authenticator(resolved_settings)
     server = FastMCP(name="Brain")
 
@@ -76,40 +91,102 @@ def create_server(
             raise ToolError(str(error)) from error
 
     @server.tool
-    def create_folder(request: FolderCreate) -> FolderResponse:
+    async def create_folder(request: FolderCreate) -> FolderResponse:
         """Create a governed Page folder."""
-        return call_knowledge(resolved_knowledge_service.create_folder, authenticated(), request)
+        return await call_knowledge_async(
+            resolved_knowledge_service.create_folder, authenticated(), request
+        )
 
     @server.tool
-    def get_folder(folder_id: UUID) -> FolderResponse:
+    async def get_folder(folder_id: UUID) -> FolderResponse:
         """Read an authorized live Page folder."""
-        return call_knowledge(resolved_knowledge_service.get_folder, authenticated(), folder_id)
+        return await call_knowledge_async(
+            resolved_knowledge_service.get_folder, authenticated(), folder_id
+        )
 
     @server.tool
-    def create_source(request: SourceCreate) -> SourceResponse:
+    async def create_source(request: SourceCreate) -> SourceResponse:
         """Create Source identity and structured provenance metadata."""
-        return call_knowledge(resolved_knowledge_service.create_source, authenticated(), request)
+        return await call_knowledge_async(
+            resolved_knowledge_service.create_source, authenticated(), request
+        )
 
     @server.tool
-    def get_source(source_id: UUID) -> SourceResponse:
+    async def get_source(source_id: UUID) -> SourceResponse:
         """Read an independently authorized live Source."""
-        return call_knowledge(resolved_knowledge_service.get_source, authenticated(), source_id)
+        return await call_knowledge_async(
+            resolved_knowledge_service.get_source, authenticated(), source_id
+        )
 
     @server.tool
-    def create_page(request: PageCreate) -> PageResponse:
+    async def list_sources() -> list[SourceInventoryItem]:
+        """List authorized live Source identities and freshness fields."""
+        return await call_knowledge_async(resolved_knowledge_service.list_sources, authenticated())
+
+    @server.tool
+    async def create_page(request: PageCreate) -> PageResponse:
         """Create a Page with its first immutable Markdown version."""
-        return call_knowledge(resolved_knowledge_service.create_page, authenticated(), request)
+        return await call_knowledge_async(
+            resolved_knowledge_service.create_page, authenticated(), request
+        )
 
     @server.tool
-    def get_page(page_id: UUID) -> PageResponse:
+    async def get_page(page_id: UUID) -> PageResponse:
         """Read an authorized Page, versions, and visible provenance."""
-        return call_knowledge(resolved_knowledge_service.get_page, authenticated(), page_id)
+        return await call_knowledge_async(
+            resolved_knowledge_service.get_page, authenticated(), page_id
+        )
 
     @server.tool
-    def create_page_version(page_id: UUID, request: PageVersionCreate) -> PageResponse:
+    async def list_pages() -> list[PageInventoryItem]:
+        """List authorized live Pages with stable paths and current hashes."""
+        return await call_knowledge_async(resolved_knowledge_service.list_pages, authenticated())
+
+    @server.tool
+    async def get_page_by_path(path: str) -> PageResponse:
+        """Read an authorized live Page by its stable folder/Page path."""
+        return await call_knowledge_async(
+            resolved_knowledge_service.get_page_by_path, authenticated(), path
+        )
+
+    @server.tool
+    async def create_page_version(page_id: UUID, request: PageVersionCreate) -> PageResponse:
         """Append an immutable Page version and make it current."""
-        return call_knowledge(
+        return await call_knowledge_async(
             resolved_knowledge_service.create_page_version, authenticated(), page_id, request
+        )
+
+    @server.tool
+    async def create_skill(request: SkillCreate) -> SkillResponse:
+        """Create a Skill with its first validated immutable document."""
+        return await call_knowledge_async(
+            resolved_skill_service.create_skill, authenticated(), request
+        )
+
+    @server.tool
+    async def list_skills() -> list[SkillInventoryItem]:
+        """List authorized live Skills and their current content hashes."""
+        return await call_knowledge_async(resolved_skill_service.list_skills, authenticated())
+
+    @server.tool
+    async def get_skill(skill_id: UUID, version: int | None = None) -> SkillResponse:
+        """Read an authorized Skill, optionally selecting an immutable version."""
+        return await call_knowledge_async(
+            resolved_skill_service.get_skill, authenticated(), skill_id, version
+        )
+
+    @server.tool
+    async def get_skill_by_slug(slug: str, version: int | None = None) -> SkillResponse:
+        """Read an authorized Skill by stable slug."""
+        return await call_knowledge_async(
+            resolved_skill_service.get_skill_by_slug, authenticated(), slug, version
+        )
+
+    @server.tool
+    async def create_skill_version(skill_id: UUID, request: SkillVersionCreate) -> SkillResponse:
+        """Append a validated Skill document if its reviewed base is still current."""
+        return await call_knowledge_async(
+            resolved_skill_service.create_skill_version, authenticated(), skill_id, request
         )
 
     return server
@@ -124,8 +201,23 @@ def call_knowledge[**P, R](function: Callable[P, R], *args: P.args, **kwargs: P.
         InvalidKnowledgeReference,
         KnowledgeConflict,
         KnowledgeNotFound,
+        SkillConflict,
+        SkillNotFound,
+        VersionConflict,
+        InvalidSkillDocument,
     ) as error:
         raise ToolError(str(error)) from error
+
+
+async def call_knowledge_async[**P, R](
+    function: Callable[P, R], *args: P.args, **kwargs: P.kwargs
+) -> R:
+    """Run the synchronous shared service boundary without blocking MCP's event loop."""
+
+    def invoke() -> R:
+        return call_knowledge(function, *args, **kwargs)
+
+    return await to_thread.run_sync(invoke)
 
 
 mcp = create_server()

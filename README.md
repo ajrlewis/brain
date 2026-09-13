@@ -8,8 +8,9 @@ The repository implements its persistent identity/access and first governed know
 slice. PostgreSQL stores Page folders, Sources, Pages, immutable PageVersions, and
 access-filtered provenance. Shared application services expose equivalent create/read
 operations through FastAPI and FastMCP, and a deterministic Northstar seed demonstrates
-versioned synthetic knowledge. Skill persistence, search, chunks, embeddings, document
-retrieval/parsing, and production identity integration remain target state.
+versioned synthetic knowledge. It also stores validated immutable Skills, exposes bounded
+authorized inventories, and explicitly seeds five repository-owned defaults. Search, chunks,
+embeddings, document retrieval/parsing, and production identity integration remain target state.
 
 It provides a persistent, structured place for an organisation to store:
 
@@ -1692,15 +1693,16 @@ They must not become independent implementations.
 The current implementation uses synchronous SQLAlchemy sessions and the synchronous
 psycopg driver. FastAPI runs its synchronous route functions in worker threads, so those
 HTTP database calls do not directly block the ASGI event loop, but throughput is still
-bounded by the thread and database connection pools. The current synchronous FastMCP tool
-functions can occupy MCP request execution while their database work completes.
+bounded by the thread and database connection pools. FastMCP database tools consistently
+offload the same synchronous application services to worker threads.
 
-Before scheduled linting, large retrieval workloads or substantial concurrent use, move
-the shared session/service boundary to SQLAlchemy `AsyncSession` with psycopg's async
-driver, or explicitly and consistently offload synchronous service calls at both
-transports. Do not mix ad hoc sync and async repositories. Async I/O improves request
-concurrency; it does not replace transactions, row locks, optimistic version checks,
-timeouts or a deliberately sized connection pool.
+The initial decision for a single Organization with roughly 400 potential users is to keep
+that consistent offloaded synchronous boundary. Before high-fanout linting, or when load
+tests show worker/database-pool saturation, move the complete shared session, repository,
+and service boundary to SQLAlchemy `AsyncSession` with psycopg's async driver. Do not mix
+ad hoc sync and async repositories. Async I/O improves request concurrency; it does not
+replace transactions, row locks, optimistic version checks, timeouts or a deliberately
+sized connection pool.
 
 ## Simple first
 
