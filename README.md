@@ -1481,6 +1481,12 @@ Expected areas include:
 
 ```text
 DATABASE_URL
+DATABASE_POOL_SIZE
+DATABASE_MAX_OVERFLOW
+DATABASE_POOL_TIMEOUT_SECONDS
+DATABASE_POOL_RECYCLE_SECONDS
+DATABASE_STATEMENT_TIMEOUT_MS
+DATABASE_LOCK_TIMEOUT_MS
 
 LOCAL_BEARER_TOKEN
 LOCAL_ORGANIZATION_ID
@@ -1690,19 +1696,25 @@ They must not become independent implementations.
 
 ## Database execution model
 
-The current implementation uses synchronous SQLAlchemy sessions and the synchronous
-psycopg driver. FastAPI runs its synchronous route functions in worker threads, so those
-HTTP database calls do not directly block the ASGI event loop, but throughput is still
-bounded by the thread and database connection pools. FastMCP database tools consistently
-offload the same synchronous application services to worker threads.
+Runtime database access uses SQLAlchemy `AsyncSession` and psycopg's async driver. FastAPI
+handlers and FastMCP tools directly await the same async application services; each operation
+owns a session, and no session is shared across concurrent tasks. Alembic and explicit seed
+commands use a separately named synchronous offline utility and are never request paths.
 
-The initial decision for a single Organization with roughly 400 potential users is to keep
-that consistent offloaded synchronous boundary. Before high-fanout linting, or when load
-tests show worker/database-pool saturation, move the complete shared session, repository,
-and service boundary to SQLAlchemy `AsyncSession` with psycopg's async driver. Do not mix
-ad hoc sync and async repositories. Async I/O improves request concurrency; it does not
-replace transactions, row locks, optimistic version checks, timeouts or a deliberately
-sized connection pool.
+The conservative per-process defaults are a 10-connection pool, 5 temporary overflow
+connections, a 10-second acquisition timeout, 30-minute recycling, a 30-second PostgreSQL
+statement timeout, and a 5-second lock timeout. These values bound database resource use and
+failure time; they are not derived from the roughly 400 potential users in the initial
+single-Organization deployment. Most users do not hold a connection, and async requests wait
+for a pool slot.
+
+Size the pool against the managed PostgreSQL connection budget. Reserve connections for
+administration, migrations, monitoring, and provider requirements, then ensure
+`replicas × processes_per_replica × (DATABASE_POOL_SIZE + DATABASE_MAX_OVERFLOW)` does not
+exceed the remaining application budget. Treat overflow as real peak capacity. Measure
+request concurrency and database wait time before increasing it; more connections can reduce
+database throughput. Async I/O improves request concurrency but does not replace transactions,
+row locks, optimistic version checks, or a deliberately sized pool.
 
 ## Simple first
 

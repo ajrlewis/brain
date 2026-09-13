@@ -1,17 +1,18 @@
-import asyncio
-from threading import Barrier, get_ident
 from uuid import UUID
 
 import httpx
+import pytest
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
+from fastmcp.exceptions import ToolError
 from mcp.types import TextContent
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 from brain_api import create_app
 from brain_auth import AuthContext, LocalBearerAuthenticator
 from brain_core import HealthService, Settings
 from brain_mcp import create_server
-from brain_mcp.server import call_knowledge_async
+from brain_mcp.server import call_knowledge
 from brain_schemas import HealthResponse
 
 
@@ -25,22 +26,12 @@ class RecordingHealthService(HealthService):
         return super().check()
 
 
-async def test_sync_service_calls_are_offloaded_concurrently() -> None:
-    barrier = Barrier(2)
-    event_loop_thread = get_ident()
+async def test_mcp_database_timeout_is_a_controlled_failure() -> None:
+    async def unavailable() -> None:
+        raise SQLAlchemyTimeoutError("pool exhausted")
 
-    def blocking_call(value: int) -> tuple[int, int]:
-        barrier.wait(timeout=2)
-        return value, get_ident()
-
-    results = await asyncio.gather(
-        call_knowledge_async(blocking_call, 1),
-        call_knowledge_async(blocking_call, 2),
-    )
-
-    assert [value for value, _ in results] == [1, 2]
-    assert all(thread_id != event_loop_thread for _, thread_id in results)
-    assert len({thread_id for _, thread_id in results}) == 2
+    with pytest.raises(ToolError, match="Database operation unavailable"):
+        await call_knowledge(unavailable)
 
 
 async def test_mcp_health_uses_injected_shared_service() -> None:

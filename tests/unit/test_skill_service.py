@@ -1,9 +1,9 @@
 from datetime import UTC, datetime
-from unittest.mock import Mock
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from brain_auth import AuthContext, AuthorizationDenied
 from brain_core import (
@@ -50,7 +50,7 @@ class FakeSkillRepository:
     versions_by_skill: dict[UUID, list[SkillVersion]]
     folders: dict[UUID, Folder]
 
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     @classmethod
@@ -60,22 +60,22 @@ class FakeSkillRepository:
         cls.versions_by_skill = {}
         cls.folders = {}
 
-    def context_is_valid(
+    async def context_is_valid(
         self, organization_id: UUID, principal_id: UUID, group_ids: frozenset[UUID]
     ) -> bool:
         return organization_id == ORG and principal_id == PRINCIPAL
 
-    def principal_exists(self, organization_id: UUID, principal_id: UUID) -> bool:
+    async def principal_exists(self, organization_id: UUID, principal_id: UUID) -> bool:
         return organization_id == ORG and principal_id == PRINCIPAL
 
-    def policy_group_ids(self, organization_id: UUID, policy_id: UUID) -> set[UUID] | None:
+    async def policy_group_ids(self, organization_id: UUID, policy_id: UUID) -> set[UUID] | None:
         return self.policies.get(policy_id) if organization_id == ORG else None
 
-    def get_folder(self, organization_id: UUID, folder_id: UUID) -> Folder | None:
+    async def get_folder(self, organization_id: UUID, folder_id: UUID) -> Folder | None:
         folder = self.folders.get(folder_id)
         return folder if folder is not None and folder.organization_id == organization_id else None
 
-    def add_skill(self, skill: Skill) -> None:
+    async def add_skill(self, skill: Skill) -> None:
         now = datetime.now(UTC)
         skill.id = uuid4()
         skill.created_at = now
@@ -83,13 +83,13 @@ class FakeSkillRepository:
         self.skills_by_id[skill.id] = skill
         self.versions_by_skill[skill.id] = []
 
-    def get_skill(
+    async def get_skill(
         self, organization_id: UUID, skill_id: UUID, *, lock: bool = False
     ) -> Skill | None:
         skill = self.skills_by_id.get(skill_id)
         return skill if skill is not None and skill.organization_id == organization_id else None
 
-    def get_skill_by_slug(self, organization_id: UUID, slug: str) -> Skill | None:
+    async def get_skill_by_slug(self, organization_id: UUID, slug: str) -> Skill | None:
         return next(
             (
                 skill
@@ -99,30 +99,31 @@ class FakeSkillRepository:
             None,
         )
 
-    def skills(self, organization_id: UUID) -> list[Skill]:
+    async def skills(self, organization_id: UUID) -> list[Skill]:
         return [
             skill
             for skill in self.skills_by_id.values()
             if skill.organization_id == organization_id and skill.current_version_id is not None
         ]
 
-    def skill_inventory(self, organization_id: UUID) -> list[tuple[Skill, UUID, str]]:
+    async def skill_inventory(self, organization_id: UUID) -> list[tuple[Skill, UUID, str]]:
         return [
             (skill, version.id, version.content_hash)
-            for skill in self.skills(organization_id)
+            for skill in self.skills_by_id.values()
+            if skill.organization_id == organization_id and skill.current_version_id is not None
             for version in self.versions_by_skill[skill.id]
             if version.id == skill.current_version_id
         ]
 
-    def add_skill_version(self, version: SkillVersion) -> None:
+    async def add_skill_version(self, version: SkillVersion) -> None:
         version.id = uuid4()
         version.created_at = datetime.now(UTC)
         self.versions_by_skill[version.skill_id].append(version)
 
-    def skill_versions(self, skill_id: UUID) -> list[SkillVersion]:
+    async def skill_versions(self, skill_id: UUID) -> list[SkillVersion]:
         return self.versions_by_skill[skill_id]
 
-    def next_skill_version(self, skill_id: UUID) -> int:
+    async def next_skill_version(self, skill_id: UUID) -> int:
         return len(self.versions_by_skill[skill_id]) + 1
 
 
@@ -130,7 +131,7 @@ class FakeSkillRepository:
 def service(monkeypatch: pytest.MonkeyPatch) -> SkillService:
     FakeSkillRepository.reset()
     monkeypatch.setattr("brain_core.skills.SkillRepository", FakeSkillRepository)
-    return SkillService(lambda: Mock(spec=Session))
+    return SkillService(lambda: AsyncMock(spec=AsyncSession))
 
 
 @pytest.fixture
@@ -138,10 +139,10 @@ def context() -> AuthContext:
     return AuthContext(ORG, PRINCIPAL, frozenset({GROUP}))
 
 
-def test_skill_create_read_list_and_version_concurrency(
+async def test_skill_create_read_list_and_version_concurrency(
     service: SkillService, context: AuthContext
 ) -> None:
-    created = service.create_skill(
+    created = await service.create_skill(
         context,
         SkillCreate(
             slug="retrieve",
@@ -152,11 +153,13 @@ def test_skill_create_read_list_and_version_concurrency(
         ),
     )
 
-    assert service.get_skill(context, created.id).current_version.content_markdown == document()
-    assert service.get_skill_by_slug(context, "retrieve", version=1).id == created.id
-    assert [item.slug for item in service.list_skills(context)] == ["retrieve"]
+    assert (
+        await service.get_skill(context, created.id)
+    ).current_version.content_markdown == document()
+    assert (await service.get_skill_by_slug(context, "retrieve", version=1)).id == created.id
+    assert [item.slug for item in await service.list_skills(context)] == ["retrieve"]
 
-    updated = service.create_skill_version(
+    updated = await service.create_skill_version(
         context,
         created.id,
         SkillVersionCreate(
@@ -168,7 +171,7 @@ def test_skill_create_read_list_and_version_concurrency(
     assert [item.version for item in updated.versions] == [1, 2]
 
     with pytest.raises(VersionConflict):
-        service.create_skill_version(
+        await service.create_skill_version(
             context,
             created.id,
             SkillVersionCreate(
@@ -177,7 +180,7 @@ def test_skill_create_read_list_and_version_concurrency(
             ),
         )
     with pytest.raises(DuplicateSkillContent):
-        service.create_skill_version(
+        await service.create_skill_version(
             context,
             created.id,
             SkillVersionCreate(
@@ -187,11 +190,11 @@ def test_skill_create_read_list_and_version_concurrency(
         )
 
 
-def test_skill_validation_missing_and_authorization(
+async def test_skill_validation_missing_and_authorization(
     service: SkillService, context: AuthContext
 ) -> None:
     with pytest.raises(InvalidSkillDocument):
-        service.create_skill(
+        await service.create_skill(
             context,
             SkillCreate(
                 slug="invalid",
@@ -202,7 +205,7 @@ def test_skill_validation_missing_and_authorization(
             ),
         )
     with pytest.raises(InvalidKnowledgeReference):
-        service.create_skill(
+        await service.create_skill(
             context,
             SkillCreate(
                 slug="missing-policy",
@@ -213,9 +216,9 @@ def test_skill_validation_missing_and_authorization(
             ),
         )
     with pytest.raises(SkillNotFound):
-        service.get_skill(context, uuid4())
+        await service.get_skill(context, uuid4())
 
-    created = service.create_skill(
+    created = await service.create_skill(
         context,
         SkillCreate(
             slug="restricted",
@@ -226,12 +229,12 @@ def test_skill_validation_missing_and_authorization(
         ),
     )
     outsider = AuthContext(ORG, PRINCIPAL, frozenset())
-    assert service.list_skills(outsider) == []
+    assert await service.list_skills(outsider) == []
     with pytest.raises(AuthorizationDenied):
-        service.get_skill(outsider, created.id)
+        await service.get_skill(outsider, created.id)
 
 
-def test_missing_version_and_invalid_skill_folder(
+async def test_missing_version_and_invalid_skill_folder(
     service: SkillService, context: AuthContext
 ) -> None:
     folder_id = uuid4()
@@ -242,7 +245,7 @@ def test_missing_version_and_invalid_skill_folder(
         access_policy_id=OPEN_POLICY,
     )
     with pytest.raises(InvalidKnowledgeReference):
-        service.create_skill(
+        await service.create_skill(
             context,
             SkillCreate(
                 slug="foldered",
@@ -253,7 +256,7 @@ def test_missing_version_and_invalid_skill_folder(
                 folder_id=folder_id,
             ),
         )
-    created = service.create_skill(
+    created = await service.create_skill(
         context,
         SkillCreate(
             slug="retrieve",
@@ -264,4 +267,4 @@ def test_missing_version_and_invalid_skill_folder(
         ),
     )
     with pytest.raises(SkillNotFound):
-        service.get_skill(context, created.id, version=99)
+        await service.get_skill(context, created.id, version=99)

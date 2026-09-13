@@ -1,5 +1,8 @@
+import asyncio
 import os
+from collections.abc import Awaitable
 from hashlib import sha256
+from time import perf_counter
 from typing import Protocol, cast
 from uuid import UUID, uuid4
 
@@ -10,23 +13,28 @@ from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from fastmcp import Client
+from fastmcp.client.client import CallToolResult
 from fastmcp.client.transports import StreamableHttpTransport
 from httpx import Response
 from psycopg.errors import CheckViolation, ForeignKeyViolation, RaiseException, UniqueViolation
+from pydantic import PostgresDsn
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.exc import DBAPIError, ProgrammingError
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 from brain_api import create_app
 from brain_auth import AuthContext, AuthorizationDenied, LocalBearerAuthenticator
 from brain_core import (
     DuplicatePageContent,
     KnowledgeService,
+    Settings,
     SkillService,
     VersionConflict,
 )
-from brain_db import Base, create_session_factory
+from brain_db import Base, create_async_engine, create_async_session_factory
 from brain_db.defaults import review_defaults, seed_defaults
 from brain_db.seed import northstar_id, seed_northstar
 from brain_schemas import (
@@ -134,7 +142,7 @@ def test_clean_database_migration_and_tenant_constraints(monkeypatch: pytest.Mon
 
 
 @pytest.mark.integration
-def test_knowledge_services_constraints_and_seed() -> None:
+async def test_knowledge_services_constraints_and_seed() -> None:
     database_url = os.getenv("TEST_DATABASE_URL")
     if database_url is None:
         pytest.skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
@@ -180,11 +188,12 @@ def test_knowledge_services_constraints_and_seed() -> None:
             (organization, group, principal),
         )
 
-    engine = create_engine(sqlalchemy_url)
-    service = KnowledgeService(create_session_factory(engine))
+    settings = Settings(database_url=PostgresDsn(sqlalchemy_url))
+    engine = create_async_engine(settings)
+    service = KnowledgeService(create_async_session_factory(engine))
     allowed = AuthContext(organization, principal, frozenset({group}))
     outsider = AuthContext(organization, principal, frozenset())
-    source = service.create_source(
+    source = await service.create_source(
         allowed,
         SourceCreate(
             source_type="memo",
@@ -194,7 +203,7 @@ def test_knowledge_services_constraints_and_seed() -> None:
             steward_id=principal,
         ),
     )
-    page = service.create_page(
+    page = await service.create_page(
         allowed,
         PageCreate(
             slug="policy",
@@ -205,7 +214,7 @@ def test_knowledge_services_constraints_and_seed() -> None:
             sources=[ProvenanceInput(source_id=source.id, relationship="derived_from")],
         ),
     )
-    updated = service.create_page_version(
+    updated = await service.create_page_version(
         allowed,
         page.id,
         PageVersionCreate(
@@ -218,7 +227,7 @@ def test_knowledge_services_constraints_and_seed() -> None:
     assert updated.current_version.version == 2
     assert [item.version for item in updated.versions] == [1, 2]
     with pytest.raises(DuplicatePageContent):
-        service.create_page_version(
+        await service.create_page_version(
             allowed,
             page.id,
             PageVersionCreate(
@@ -226,13 +235,14 @@ def test_knowledge_services_constraints_and_seed() -> None:
                 content_markdown="# Version two",
             ),
         )
-    assert service.get_page(outsider, page.id).current_version.provenance == []
+    assert (await service.get_page(outsider, page.id)).current_version.provenance == []
     with pytest.raises(AuthorizationDenied):
-        service.get_source(outsider, source.id)
+        await service.get_source(outsider, source.id)
     with pytest.raises(AuthorizationDenied):
-        service.get_page(AuthContext(uuid4(), principal, frozenset()), page.id)
+        await service.get_page(AuthContext(uuid4(), principal, frozenset()), page.id)
 
-    with engine.connect() as connection:
+    sync_engine = create_engine(sqlalchemy_url)
+    with sync_engine.connect() as connection:
         transaction = connection.begin()
         with pytest.raises(ProgrammingError):
             connection.execute(
@@ -241,7 +251,7 @@ def test_knowledge_services_constraints_and_seed() -> None:
             )
         transaction.rollback()
 
-    second_page = service.create_page(
+    second_page = await service.create_page(
         allowed,
         PageCreate(
             slug="second",
@@ -319,7 +329,8 @@ def test_knowledge_services_constraints_and_seed() -> None:
                 "VALUES (%s, %s, %s, 'derived_from')",
                 (other_organization, page.current_version.id, other_source),
             )
-    engine.dispose()
+    sync_engine.dispose()
+    await engine.dispose()
 
     with (
         psycopg.connect(database_url, autocommit=True) as connection,
@@ -365,7 +376,7 @@ def test_knowledge_services_constraints_and_seed() -> None:
 
 
 @pytest.mark.integration
-def test_skill_service_constraints_stale_writes_and_local_seed_divergence() -> None:
+async def test_skill_service_constraints_stale_writes_and_local_seed_divergence() -> None:
     database_url = os.getenv("TEST_DATABASE_URL")
     if database_url is None:
         pytest.skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
@@ -387,8 +398,9 @@ def test_skill_service_constraints_stale_writes_and_local_seed_divergence() -> N
     principal = northstar_id("principal:alex")
     policy = northstar_id("policy:organization-wide")
     context = AuthContext(organization, principal, frozenset())
-    engine = create_engine(sqlalchemy_url)
-    service = SkillService(create_session_factory(engine))
+    settings = Settings(database_url=PostgresDsn(sqlalchemy_url))
+    engine = create_async_engine(settings)
+    service = SkillService(create_async_session_factory(engine))
     markdown = """---
 name: test
 description: Test Skill.
@@ -399,7 +411,7 @@ tools: []
 
 # Test
 """
-    created = service.create_skill(
+    created = await service.create_skill(
         context,
         SkillCreate(
             slug="test-skill",
@@ -410,7 +422,7 @@ tools: []
         ),
     )
     updated_markdown = markdown.replace("# Test", "# Test updated")
-    updated = service.create_skill_version(
+    updated = await service.create_skill_version(
         context,
         created.id,
         SkillVersionCreate(
@@ -419,7 +431,7 @@ tools: []
         ),
     )
     with pytest.raises(VersionConflict):
-        service.create_skill_version(
+        await service.create_skill_version(
             context,
             created.id,
             SkillVersionCreate(
@@ -427,9 +439,9 @@ tools: []
                 content_markdown=markdown.replace("# Test", "# Stale"),
             ),
         )
-    assert len(service.get_skill(context, created.id).versions) == 2
+    assert len((await service.get_skill(context, created.id)).versions) == 2
     with pytest.raises(InvalidSkillDocument):
-        service.create_skill_version(
+        await service.create_skill_version(
             context,
             created.id,
             SkillVersionCreate(
@@ -437,7 +449,8 @@ tools: []
                 content_markdown="# invalid",
             ),
         )
-    with engine.connect() as connection:
+    sync_engine = create_engine(sqlalchemy_url)
+    with sync_engine.connect() as connection:
         transaction = connection.begin()
         with pytest.raises(ProgrammingError):
             connection.execute(
@@ -445,7 +458,8 @@ tools: []
                 {"id": created.current_version.id},
             )
         transaction.rollback()
-    engine.dispose()
+    sync_engine.dispose()
+    await engine.dispose()
 
     local_markdown = markdown.replace("name: test", "name: index").replace(
         "# Test", "# Locally edited index"
@@ -529,10 +543,11 @@ async def test_http_and_mcp_have_equivalent_knowledge_access() -> None:
     open_policy = northstar_id("policy:organization-wide")
     restricted_policy = northstar_id("policy:deal-team")
     restricted_source = northstar_id("source:committee-notes")
-    service = KnowledgeService(create_session_factory(create_engine(sqlalchemy_url)))
-    skill_service = SkillService(create_session_factory(create_engine(sqlalchemy_url)))
+    settings = Settings(database_url=PostgresDsn(sqlalchemy_url))
+    service = KnowledgeService(create_async_session_factory(create_async_engine(settings)))
+    skill_service = SkillService(create_async_session_factory(create_async_engine(settings)))
     allowed_context = AuthContext(organization, principal, frozenset({group}))
-    page = service.create_page(
+    page = await service.create_page(
         allowed_context,
         PageCreate(
             slug="transport-parity",
@@ -554,7 +569,7 @@ tools:
 
 # Transport Skill
 """
-    skill = skill_service.create_skill(
+    skill = await skill_service.create_skill(
         allowed_context,
         SkillCreate(
             slug="transport-skill",
@@ -564,7 +579,7 @@ tools:
             steward_id=principal,
         ),
     )
-    restricted_skill = skill_service.create_skill(
+    restricted_skill = await skill_service.create_skill(
         allowed_context,
         SkillCreate(
             slug="restricted-skill",
@@ -713,3 +728,287 @@ tools:
     assert denied_skill_mcp.is_error is True
     assert missing_skill_http.status_code == 404
     assert missing_skill_mcp.is_error is True
+
+
+@pytest.mark.integration
+async def test_concurrent_page_and_skill_writers_publish_one_winner() -> None:
+    database_url = os.getenv("TEST_DATABASE_URL")
+    if database_url is None:
+        pytest.skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+    sqlalchemy_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    with (
+        psycopg.connect(database_url, autocommit=True) as connection,
+        connection.cursor() as cursor,
+    ):
+        cursor.execute("TRUNCATE organizations CASCADE")
+    seed_northstar(sqlalchemy_url)
+
+    settings = Settings(database_url=PostgresDsn(sqlalchemy_url), database_pool_size=2)
+    engine = create_async_engine(settings)
+    factory = create_async_session_factory(engine)
+    knowledge = KnowledgeService(factory)
+    skills = SkillService(factory)
+    organization = northstar_id("organization:northstar")
+    principal = northstar_id("principal:alex")
+    policy = northstar_id("policy:organization-wide")
+    context = AuthContext(organization, principal, frozenset())
+    page = await knowledge.create_page(
+        context,
+        PageCreate(
+            slug="concurrent-page",
+            title="Concurrent Page",
+            content_markdown="# Base",
+            access_policy_id=policy,
+            steward_id=principal,
+        ),
+    )
+    skill_document = """---
+name: concurrent-skill
+description: Concurrency test.
+inputs: {}
+outputs: {}
+tools: []
+---
+
+# Base
+"""
+    skill = await skills.create_skill(
+        context,
+        SkillCreate(
+            slug="concurrent-skill",
+            name="Concurrent Skill",
+            content_markdown=skill_document,
+            access_policy_id=policy,
+            steward_id=principal,
+        ),
+    )
+
+    page_results = await asyncio.gather(
+        *(
+            knowledge.create_page_version(
+                context,
+                page.id,
+                PageVersionCreate(
+                    expected_current_version_id=page.current_version.id,
+                    content_markdown=f"# Writer {writer}",
+                ),
+            )
+            for writer in ("A", "B")
+        ),
+        return_exceptions=True,
+    )
+    skill_results = await asyncio.gather(
+        *(
+            skills.create_skill_version(
+                context,
+                skill.id,
+                SkillVersionCreate(
+                    expected_current_version_id=skill.current_version.id,
+                    content_markdown=skill_document.replace("# Base", f"# Writer {writer}"),
+                ),
+            )
+            for writer in ("A", "B")
+        ),
+        return_exceptions=True,
+    )
+
+    for results in (page_results, skill_results):
+        assert sum(isinstance(result, VersionConflict) for result in results) == 1
+        assert sum(not isinstance(result, BaseException) for result in results) == 1
+    assert len((await knowledge.get_page(context, page.id)).versions) == 2
+    assert len((await skills.get_skill(context, skill.id)).versions) == 2
+    await engine.dispose()
+
+
+@pytest.mark.integration
+async def test_small_async_pool_waits_responsively_and_times_out_cleanly() -> None:
+    database_url = os.getenv("TEST_DATABASE_URL")
+    if database_url is None:
+        pytest.skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+    sqlalchemy_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    settings = Settings(
+        database_url=PostgresDsn(sqlalchemy_url),
+        database_pool_size=2,
+        database_max_overflow=0,
+        database_pool_timeout_seconds=0.05,
+        database_statement_timeout_ms=50,
+    )
+    engine = create_async_engine(settings)
+    factory = create_async_session_factory(engine)
+
+    first = factory()
+    second = factory()
+    await first.execute(text("SELECT 1"))
+    await second.execute(text("SELECT 1"))
+    waiting = factory()
+    with pytest.raises(SQLAlchemyTimeoutError):
+        await waiting.execute(text("SELECT 1"))
+    await waiting.close()
+    await second.close()
+
+    ticks = 0
+
+    async def ticker() -> None:
+        nonlocal ticks
+        for _ in range(5):
+            await asyncio.sleep(0.01)
+            if ticks == 0:
+                assert not statement.done()
+            ticks += 1
+
+    started = perf_counter()
+    statement = asyncio.create_task(first.execute(text("SELECT pg_sleep(0.2)")))
+    await ticker()
+    with pytest.raises(DBAPIError):
+        await statement
+    assert ticks == 5
+    assert perf_counter() - started < 0.5
+    await first.rollback()
+    await first.close()
+    await engine.dispose()
+
+
+@pytest.mark.integration
+async def test_hundred_concurrent_http_and_mcp_reads_share_a_small_pool() -> None:
+    database_url = os.getenv("TEST_DATABASE_URL")
+    if database_url is None:
+        pytest.skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+    sqlalchemy_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    with (
+        psycopg.connect(database_url, autocommit=True) as connection,
+        connection.cursor() as cursor,
+    ):
+        cursor.execute("TRUNCATE organizations CASCADE")
+    seed_northstar(sqlalchemy_url)
+    seed_defaults(
+        sqlalchemy_url,
+        organization_slug="northstar",
+        policy_name="Northstar organization-wide",
+        steward_external_subject="northstar-alex",
+        audit_external_subject="northstar-cortex",
+    )
+
+    settings = Settings(
+        database_url=PostgresDsn(sqlalchemy_url),
+        database_pool_size=5,
+        database_max_overflow=0,
+        database_pool_timeout_seconds=5,
+    )
+    engine = create_async_engine(settings)
+    factory = create_async_session_factory(engine)
+    knowledge = KnowledgeService(factory)
+    skills = SkillService(factory)
+    organization = northstar_id("organization:northstar")
+    principal = northstar_id("principal:alex")
+    group = northstar_id("group:investment")
+    restricted_source = northstar_id("source:committee-notes")
+    allowed = AuthContext(organization, principal, frozenset({group}))
+    outsider = AuthContext(organization, principal, frozenset())
+
+    def app_for(context: AuthContext) -> FastAPI:
+        return create_app(
+            settings=settings,
+            knowledge_service=knowledge,
+            skill_service=skills,
+            authenticator=LocalBearerAuthenticator(token="secret", context=context),
+        )
+
+    allowed_app = app_for(allowed)
+    denied_app = app_for(outsider)
+    headers = {"Authorization": "Bearer secret"}
+    allowed_http = httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=allowed_app),
+        base_url="http://testserver",
+        headers=headers,
+    )
+    denied_http = httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=denied_app),
+        base_url="http://testserver",
+        headers=headers,
+    )
+
+    def mcp_transport(app: FastAPI) -> StreamableHttpTransport:
+        def client_factory(
+            headers: dict[str, str] | None = None,
+            timeout: httpx.Timeout | None = None,
+            auth: httpx.Auth | None = None,
+            **kwargs: object,
+        ) -> httpx.AsyncClient:
+            return httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app),
+                base_url="http://testserver",
+                headers=headers,
+                timeout=timeout,
+                auth=auth,
+            )
+
+        return StreamableHttpTransport(
+            "http://testserver/mcp/",
+            headers={"Authorization": "Bearer secret"},
+            httpx_client_factory=client_factory,
+        )
+
+    allowed_mcp = Client(mcp_transport(allowed_app))
+    denied_mcp = Client(mcp_transport(denied_app))
+
+    ticks = 0
+
+    async def ticker() -> None:
+        nonlocal ticks
+        for _ in range(10):
+            await asyncio.sleep(0)
+            ticks += 1
+
+    async def timed[T](operation: Awaitable[T]) -> tuple[T, float]:
+        request_started = perf_counter()
+        result = await operation
+        return result, perf_counter() - request_started
+
+    async with (
+        allowed_app.router.lifespan_context(allowed_app),
+        denied_app.router.lifespan_context(denied_app),
+        allowed_http,
+        denied_http,
+        allowed_mcp,
+        denied_mcp,
+    ):
+        http_calls = [
+            allowed_http.get(("/pages", "/sources", "/skills")[index % 3]) for index in range(40)
+        ] + [denied_http.get(f"/sources/{restricted_source}") for _ in range(10)]
+        mcp_calls = [
+            allowed_mcp.call_tool(("list_pages", "list_sources", "list_skills")[index % 3])
+            for index in range(40)
+        ] + [
+            denied_mcp.call_tool(
+                "get_source", {"source_id": str(restricted_source)}, raise_on_error=False
+            )
+            for _ in range(10)
+        ]
+        started = perf_counter()
+        gathered = await asyncio.wait_for(
+            asyncio.gather(
+                *(timed(operation) for operation in http_calls),
+                *(timed(operation) for operation in mcp_calls),
+                ticker(),
+            ),
+            timeout=30,
+        )
+        elapsed = perf_counter() - started
+
+    timed_results = cast(list[tuple[object, float]], gathered[:100])
+    http_results = cast(list[Response], [result for result, _ in timed_results[:50]])
+    mcp_results = cast(list[CallToolResult], [result for result, _ in timed_results[50:]])
+    latencies = sorted(duration for _, duration in timed_results)
+    print(
+        "async-load "
+        f"requests=100 pool=5 overflow=0 elapsed={elapsed:.3f}s "
+        f"throughput={100 / elapsed:.1f}rps "
+        f"p50={latencies[49] * 1000:.1f}ms p95={latencies[94] * 1000:.1f}ms"
+    )
+    assert all(response.status_code == 200 for response in http_results[:40])
+    assert all(response.status_code == 403 for response in http_results[40:])
+    assert all(not result.is_error for result in mcp_results[:40])
+    assert all(result.is_error for result in mcp_results[40:])
+    assert ticks == 10
+    assert "Checked out connections: 0" in engine.pool.status()
+    await engine.dispose()

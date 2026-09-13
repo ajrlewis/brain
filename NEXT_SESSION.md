@@ -1,5 +1,13 @@
 # Next Session
 
+## Status
+
+Completed on 2026-09-13. The async runtime boundary, concurrency verification, operational
+documentation, and full project checks described below were implemented and verified. The
+next persistence refactor is tracked in `.agents/todos/TODO.md`: evaluate conventional
+per-Skill bundle directories with `SKILL.md` and `references/` while preserving seed and
+review behavior.
+
 ## Objective
 
 Migrate Brain's complete runtime database boundary from synchronous SQLAlchemy/psycopg

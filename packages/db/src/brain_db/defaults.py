@@ -13,7 +13,11 @@ from sqlalchemy.dialects.postgresql import insert
 
 from brain_db.base import Base
 from brain_db.models import AccessPolicy, Organization, Principal, Skill, SkillVersion
-from brain_db.session import create_engine, create_session_factory, session_scope
+from brain_db.offline import (
+    create_offline_engine,
+    create_offline_session_factory,
+    offline_session_scope,
+)
 from brain_schemas import parse_skill_document
 
 DEFAULT_NAMESPACE = UUID("a44bda51-9701-53b9-909f-dcc14a8f973f")
@@ -170,11 +174,11 @@ def seed_defaults(
 ) -> SeedDefaultsResult:
     """Create missing version-one defaults and preserve every existing current Skill."""
     bundle = load_default_bundle(bundle_root)
-    engine = create_engine(DatabaseSettings(database_url))
-    factory = create_session_factory(engine)
+    engine = create_offline_engine(DatabaseSettings(database_url))
+    factory = create_offline_session_factory(engine)
     created: list[str] = []
     preserved: list[str] = []
-    with session_scope(factory) as session:
+    with offline_session_scope(factory) as session:
         organization = session.scalar(
             select(Organization).where(
                 Organization.slug == organization_slug,
@@ -275,10 +279,10 @@ def review_defaults(
 ) -> tuple[DefaultSkillReview, ...]:
     """Compare bundled documents with deployment state without changing either."""
     bundle = load_default_bundle(bundle_root)
-    engine = create_engine(DatabaseSettings(database_url))
-    factory = create_session_factory(engine)
+    engine = create_offline_engine(DatabaseSettings(database_url))
+    factory = create_offline_session_factory(engine)
     reviews: list[DefaultSkillReview] = []
-    with session_scope(factory) as session:
+    with offline_session_scope(factory) as session:
         organization = session.scalar(
             select(Organization).where(
                 Organization.slug == organization_slug,

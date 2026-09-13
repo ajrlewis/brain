@@ -60,13 +60,30 @@ UV_CACHE_DIR="$PWD/.uv-cache" uv run pyright
 UV_CACHE_DIR="$PWD/.uv-cache" uv run pytest -m 'not integration' --cov --cov-report=term-missing
 ```
 
-The last command ran 45 tests with 90%+ branch-aware coverage. The dependency-backed
-integration suite is intentionally separate and ran 6 PostgreSQL tests:
+The last command ran 50 tests with 90%+ branch-aware coverage. The dependency-backed
+integration suite is intentionally separate and includes PostgreSQL stale-writer races,
+timeout behavior, and a 100-request HTTP/MCP concurrency exercise with a five-connection pool:
 
 ```bash
 TEST_DATABASE_URL=postgresql://brain:brain@localhost:5432/brain \
   UV_CACHE_DIR="$PWD/.uv-cache" uv run pytest -m integration
 ```
+
+The suite ran 9 PostgreSQL tests on 2026-09-13.
+
+The concurrency test reports elapsed time, throughput, and p50/p95 request latency without
+asserting machine-specific performance thresholds. It does assert authorization/correctness,
+event-loop progress, controlled pool/statement timeouts, and zero checked-out connections.
+
+Measurement recorded 2026-09-13 on macOS 26.3.1 x86_64 with Docker 29.7.2,
+PostgreSQL 17.11, and pgvector 0.8.6: 100 simultaneous in-process ASGI requests (50 HTTP,
+50 MCP; Page, Source, Skill, and inventory reads; 20 expected authorization denials) used
+pool size 5 with zero overflow and completed in 1.807 seconds, 55.4 requests/second, p50
+706.5 ms, p95 1694.3 ms, and zero unexpected failures or checked-out connections afterward.
+The event-loop probe progressed throughout. Separate pool size 2 checks used 50 ms pool
+acquisition and statement timeouts and returned controlled exceptions. These local synthetic
+measurements verify bounded concurrency behavior; they are not a production capacity or
+400-concurrent-user claim.
 
 ## PostgreSQL And Docker
 
