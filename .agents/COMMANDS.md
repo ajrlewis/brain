@@ -7,7 +7,10 @@ Python 3.13.15, Docker 29.7.2, and Docker Compose 5.5.0 were used on 2026-09-12.
 The explicit cache path below is required in restricted coding-agent environments and is
 safe to use elsewhere.
 
-## Workspace
+## Mind workspace
+
+The root uv and npm workspaces include Brain beneath `products/brain`; Cortex currently has a
+specification but no implementation workspace members.
 
 Verified on 2026-09-14:
 
@@ -48,7 +51,7 @@ DATABASE_URL=postgresql+psycopg://brain:brain@localhost:5432/brain \
   UV_CACHE_DIR="$PWD/.uv-cache" uv run brain-seed-northstar
 ```
 
-The command reads `examples/northstar/seed/manifest.yaml` plus its referenced UTF-8
+The command reads `products/brain/examples/northstar/seed/manifest.yaml` plus its referenced UTF-8
 documents. It performs no downloads and can be rerun without duplicating identities,
 versions, provenance, or deterministic derived chunks.
 
@@ -138,7 +141,7 @@ The Compose model and application image build were verified on 2026-09-14:
 
 ```bash
 docker compose config
-docker build -t brain:knowledge .
+docker build -f products/brain/Dockerfile -t brain:knowledge .
 ```
 
 Run the combined FastAPI and FastMCP HTTP application with PostgreSQL:
@@ -165,7 +168,7 @@ For a host-run migration instead of the one-shot container:
 
 ```bash
 DATABASE_URL=postgresql+psycopg://brain:brain@localhost:5432/brain \
-  UV_CACHE_DIR="$PWD/.uv-cache" uv run alembic upgrade head
+  UV_CACHE_DIR="$PWD/.uv-cache" uv run alembic -c products/brain/alembic.ini upgrade head
 ```
 
 If host port 5432 is already occupied, select another port consistently for Compose and

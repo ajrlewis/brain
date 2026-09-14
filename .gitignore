@@ -11,5 +11,5 @@ coverage.xml
 htmlcov/
 node_modules/
 .next/
-apps/web/test-results/
-apps/web/playwright-report/
+products/*/apps/web/test-results/
+products/*/apps/web/playwright-report/

@@ -1,25 +1,19 @@
 # Monorepo Preset
 
-Adopted for Brain's Python monorepo. The identity/access, governed knowledge, and Skill
-persistence slices implement `apps/api`, `apps/mcp`, and the responsibility-based
-`packages/` boundaries below; search behavior remains target state.
+Adopted for the Mind product monorepo. Brain implements identity/access, governed knowledge,
+Skill persistence, search, and web-console slices. Cortex is specified but not implemented.
 
 ```text
-apps/
-├── api/                  HTTP interface
-└── mcp/                  MCP interface
-
-packages/
-├── core/                 domain behavior
-├── db/                   persistence
-├── ai/                   provider-neutral embedding boundary
-├── search/               authorized retrieval
-├── auth/                 authorization context
-└── schemas/              shared public contracts
+products/
+├── brain/
+│   ├── apps/             HTTP, MCP, and web interfaces
+│   ├── packages/         Brain domain and infrastructure packages
+│   └── tests/
+└── cortex/               specification only
 ```
 
 - Create only directories that represent real components. The names above are conventional examples, not mandatory empty scaffolding.
-- Treat each `apps/` child as an independently runnable or deployable product boundary with explicit configuration, entrypoints, ownership, and verification.
+- Treat each `products/` child as an independently deployable product boundary and each `apps/` child as an independently runnable application boundary.
 - Put genuinely reusable code in focused `packages/` modules with deliberate public APIs. Do not create a generic `shared`, `common`, or `utils` dumping ground.
 - Keep dependency direction clear: applications may depend on packages; packages must not reach into applications; avoid cyclic package dependencies.
 - Extract a package when a stable domain or technical boundary justifies it, not merely because code might be reused later.

@@ -9,7 +9,7 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - brain-postgres-data:/var/lib/postgresql/data
-      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/001-vector.sql:ro
+      - ./products/brain/docker/postgres/init.sql:/docker-entrypoint-initdb.d/001-vector.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U brain -d brain"]
       interval: 2s
@@ -19,6 +19,7 @@ services:
   api:
     build:
       context: .
+      dockerfile: products/brain/Dockerfile
       target: api
     environment:
       DATABASE_URL: postgresql+psycopg://brain:brain@postgres:5432/brain
@@ -52,6 +53,7 @@ services:
   web:
     build:
       context: .
+      dockerfile: products/brain/Dockerfile
       target: web
     environment:
       BRAIN_API_URL: http://api:8000
@@ -73,8 +75,9 @@ services:
   migrate:
     build:
       context: .
+      dockerfile: products/brain/Dockerfile
       target: api
-    command: ["alembic", "upgrade", "head"]
+    command: ["alembic", "-c", "products/brain/alembic.ini", "upgrade", "head"]
     environment:
       DATABASE_URL: postgresql+psycopg://brain:brain@postgres:5432/brain
     depends_on:

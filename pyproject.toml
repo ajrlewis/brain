@@ -1,5 +1,5 @@
 [project]
-name = "brain-workspace"
+name = "mind-workspace"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = []
@@ -18,8 +18,8 @@ dev = [
 package = false
 
 [tool.uv.workspace]
-members = ["apps/*", "packages/*"]
-exclude = ["apps/web"]
+members = ["products/*/apps/*", "products/*/packages/*", "packages/*"]
+exclude = ["products/*/apps/web"]
 
 [tool.uv.sources]
 brain-ai = { workspace = true }
@@ -34,7 +34,7 @@ brain-search = { workspace = true }
 [tool.ruff]
 target-version = "py313"
 line-length = 100
-src = ["apps/*/src", "packages/*/src", "tests"]
+src = ["products/*/apps/*/src", "products/*/packages/*/src", "packages/*/src", "products/*/tests"]
 extend-exclude = ["README.md", ".agents"]
 
 [tool.ruff.lint]
@@ -43,15 +43,15 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 [tool.pyright]
 pythonVersion = "3.13"
 typeCheckingMode = "strict"
-include = ["apps", "packages", "tests"]
-exclude = ["**/__pycache__", "packages/db/hatch_build.py"]
+include = ["products/*/apps", "products/*/packages", "products/*/tests"]
+exclude = ["**/__pycache__", "products/brain/packages/db/hatch_build.py"]
 venvPath = "."
 venv = ".venv"
 
 [tool.pytest.ini_options]
 addopts = "--strict-markers --strict-config"
 asyncio_mode = "auto"
-testpaths = ["tests"]
+testpaths = ["products/*/tests"]
 markers = [
   "integration: requires local infrastructure",
   "e2e: exercises a runnable application boundary",
@@ -60,7 +60,10 @@ markers = [
 [tool.coverage.run]
 branch = true
 source = ["brain_api", "brain_auth", "brain_core", "brain_db", "brain_mcp", "brain_schemas"]
-omit = ["packages/db/src/brain_db/defaults.py", "packages/db/src/brain_db/seed.py"]
+omit = [
+  "products/brain/packages/db/src/brain_db/defaults.py",
+  "products/brain/packages/db/src/brain_db/seed.py",
+]
 
 [tool.coverage.report]
 fail_under = 90

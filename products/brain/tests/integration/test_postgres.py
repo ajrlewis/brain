@@ -86,7 +86,7 @@ def test_clean_database_migration_and_tenant_constraints(monkeypatch: pytest.Mon
 
     sqlalchemy_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
     monkeypatch.setenv("DATABASE_URL", sqlalchemy_url)
-    config = Config("alembic.ini")
+    config = Config("products/brain/alembic.ini")
     command.downgrade(config, "base")
     command.upgrade(config, "head")
 
