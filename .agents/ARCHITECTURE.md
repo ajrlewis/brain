@@ -17,8 +17,11 @@ workspace. Cortex implements an independently runnable FastAPI health service, N
 shell, and the responsibility-focused `cortex-brain` HTTP client package. The Cortex application
 owns the client lifecycle and uses Brain's public health and authenticated identity-context routes
 through bounded requests. Its dependency diagnostic exposes safe status categories while local
-health remains dependency-free. Cortex has no agent runtime, identity implementation, persistence,
-or model provider yet. No cross-product package has been extracted.
+health remains dependency-free. The provider-neutral `cortex-ai` package defines immutable
+single-turn chat contracts, controlled model errors, an async non-streaming protocol, and a
+deterministic synthetic implementation. Cortex exposes a stateless `POST /chat/turn` through an
+injected application service. Cortex has no agent runtime, identity implementation, persistence,
+or production model provider yet. No cross-product package has been extracted.
 
 ## Brain Purpose And Boundary
 

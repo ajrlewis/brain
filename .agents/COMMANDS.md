@@ -36,6 +36,14 @@ The minimal Cortex HTTP service exposes `GET /health` on port 8000 when run dire
 UV_CACHE_DIR="$PWD/.uv-cache" uv run cortex-api
 ```
 
+It also exposes the stateless deterministic-model route `POST /chat/turn`. With Compose running,
+the real boundary check is:
+
+```bash
+CORTEX_TEST_URL=http://127.0.0.1:8100 \
+  UV_CACHE_DIR="$PWD/.uv-cache" uv run pytest products/cortex/tests/e2e/test_chat_turn.py
+```
+
 Set both `BRAIN_URL` and `BRAIN_API_KEY` to enable `GET /health/brain`; the local `GET /health`
 remains independent. With the Compose stack running, the real Cortex-to-Brain HTTP boundary check
 is:
@@ -97,7 +105,8 @@ UV_CACHE_DIR="$PWD/.uv-cache" uv run pyright
 UV_CACHE_DIR="$PWD/.uv-cache" uv run pytest -m 'not integration' --cov --cov-report=term-missing
 ```
 
-The last command ran 58 tests with 90%+ branch-aware coverage. The dependency-backed
+The last command ran 106 tests (with two unconfigured external-boundary tests skipped) and 90%+
+branch-aware coverage. The dependency-backed
 integration suite is intentionally separate and includes PostgreSQL stale-writer races,
 timeout behavior, and a 100-request HTTP/MCP concurrency exercise with a five-connection pool:
 

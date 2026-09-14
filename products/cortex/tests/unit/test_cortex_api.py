@@ -4,6 +4,14 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from cortex_ai import (
+    ChatTurnService,
+    InvalidModelOutput,
+    ModelRejectedRequest,
+    ModelResponse,
+    ModelTimeout,
+    ModelUnavailable,
+)
 from cortex_api import create_app
 from cortex_api.settings import Settings
 from cortex_brain import BrainClient
@@ -128,3 +136,64 @@ def test_enabled_settings_construct_application_client() -> None:
 
     with TestClient(app):
         assert isinstance(app.state.brain_client, BrainClient)
+
+
+def test_chat_turn_uses_deterministic_model() -> None:
+    response = TestClient(create_app()).post(
+        "/chat/turn", json={"messages": [{"role": "user", "content": "Northstar hello"}]}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "message": {"role": "assistant", "content": "Synthetic response to: Northstar hello"},
+        "model": "cortex-deterministic-v1",
+        "usage": {"input_tokens": 2, "output_tokens": 5},
+    }
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected_error"),
+    [
+        ({"messages": []}, None),
+        ({"messages": [{"role": "tool", "content": "x"}]}, None),
+        ({"messages": [{"role": "user", "content": "  "}]}, None),
+        ({"messages": [{"role": "user", "content": "x" * 8001}]}, None),
+        (
+            {"messages": [{"role": "assistant", "content": "synthetic"}]},
+            "history_must_end_with_user",
+        ),
+    ],
+)
+def test_chat_turn_rejects_invalid_input(payload: object, expected_error: str | None) -> None:
+    response = TestClient(create_app()).post("/chat/turn", json=payload)
+
+    assert response.status_code == 422
+    assert response.json() == {"error": expected_error or "invalid_request"}
+    assert "x" * 8001 not in response.text
+
+
+@pytest.mark.parametrize(
+    ("failure", "response_status", "error"),
+    [
+        (ModelTimeout, 503, "model_timeout"),
+        (ModelUnavailable, 503, "model_unavailable"),
+        (InvalidModelOutput, 502, "invalid_model_response"),
+        (ModelRejectedRequest, 502, "model_rejected_request"),
+        (RuntimeError, 502, "model_error"),
+    ],
+)
+def test_chat_turn_safely_translates_model_failures(
+    failure: type[Exception], response_status: int, error: str
+) -> None:
+    class FailingModel:
+        async def invoke(self, _: object) -> ModelResponse:
+            raise failure("sensitive-secret hidden reasoning")
+
+    response = TestClient(create_app(chat_service=ChatTurnService(FailingModel()))).post(
+        "/chat/turn", json={"messages": [{"role": "user", "content": "hello"}]}
+    )
+
+    assert response.status_code == response_status
+    assert response.json() == {"error": error}
+    assert "sensitive-secret" not in response.text
+    assert "reasoning" not in response.text

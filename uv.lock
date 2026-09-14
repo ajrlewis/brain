@@ -18,6 +18,7 @@ members = [
     "brain-mcp",
     "brain-schemas",
     "brain-search",
+    "cortex-ai",
     "cortex-api",
     "cortex-brain",
     "mind-workspace",
@@ -370,10 +371,22 @@ wheels = [
 ]
 
 [[package]]
+name = "cortex-ai"
+version = "0.1.0"
+source = { editable = "products/cortex/packages/ai" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.11,<3" }]
+
+[[package]]
 name = "cortex-api"
 version = "0.1.0"
 source = { editable = "products/cortex/apps/api" }
 dependencies = [
+    { name = "cortex-ai" },
     { name = "cortex-brain" },
     { name = "fastapi" },
     { name = "pydantic-settings" },
@@ -382,6 +395,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cortex-ai", editable = "products/cortex/packages/ai" },
     { name = "cortex-brain", editable = "products/cortex/packages/brain" },
     { name = "fastapi", specifier = ">=0.116,<1" },
     { name = "pydantic-settings", specifier = ">=2.10,<3" },
