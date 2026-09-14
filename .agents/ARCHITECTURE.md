@@ -1,11 +1,21 @@
 # Architecture
 
-`README.md` is the canonical target-state specification. The implemented system is a Python
+`README.md` defines the Mind workspace. `products/brain/README.md` and
+`products/cortex/README.md` are the product specifications. The only implemented product is
+currently Brain: a Python
 3.13 uv workspace with HTTP and MCP interfaces over shared application services, a
 provider-neutral authorization context, and PostgreSQL identity/access plus governed
 knowledge and Skill persistence plus authorization-safe hybrid Page search managed by Alembic.
 
-## Purpose And Boundary
+## Workspace And Product Boundary
+
+Mind is a product monorepo rooted at `products/`. Brain owns governed knowledge and Skills;
+Cortex owns agent reasoning and action. Both products remain independently deployable, and
+Cortex must integrate with Brain through Brain's public HTTP or MCP interfaces rather than its
+database or internal packages. Root manifests, Compose, CI, and agent guidance coordinate the
+workspace. No cross-product package has been extracted yet.
+
+## Brain Purpose And Boundary
 
 Brain is a self-hosted, agent-agnostic store for governed organisational knowledge and reusable agent Skills. It stores and serves durable state through HTTP and MCP. It does not browse, fetch provider content, execute Skills, select tools, or orchestrate agent workflows; Cortex or another external agent owns those responsibilities.
 
@@ -17,14 +27,14 @@ HTTP API ─┐
 MCP ──────┘                                  └─────> provider-neutral embeddings
 ```
 
-- `apps/api` and `apps/mcp` are thin transport boundaries over shared services. `apps/web`
+- `products/brain/apps/api` and `products/brain/apps/mcp` are thin transport boundaries over shared services. `products/brain/apps/web`
   is a read-only Next.js console over the public HTTP API and owns no domain rules.
-- `packages/core` owns typed settings plus shared health, identity, knowledge, and Skill application services.
-- `packages/schemas` owns explicit transport-neutral public request/response contracts.
-- `packages/auth` owns immutable `AuthContext`, local bearer authentication, and the initial same-tenant/any-group policy evaluator.
-- `packages/db` owns declarative metadata, identity/access, knowledge, and Skill models, engine/session factories, caller-owned repositories, Alembic, and explicit idempotent seeds.
-- `packages/ai` owns the provider-neutral embedding protocol and deterministic synthetic local
-  implementation. `packages/search` owns deterministic Markdown chunking and PostgreSQL
+- `products/brain/packages/core` owns typed settings plus shared health, identity, knowledge, and Skill application services.
+- `products/brain/packages/schemas` owns explicit transport-neutral public request/response contracts.
+- `products/brain/packages/auth` owns immutable `AuthContext`, local bearer authentication, and the initial same-tenant/any-group policy evaluator.
+- `products/brain/packages/db` owns declarative metadata, identity/access, knowledge, and Skill models, engine/session factories, caller-owned repositories, Alembic, and explicit idempotent seeds.
+- `products/brain/packages/ai` owns the provider-neutral embedding protocol and deterministic synthetic local
+  implementation. `products/brain/packages/search` owns deterministic Markdown chunking and PostgreSQL
   full-text/pgvector retrieval without exposing database details to transports.
 
 Applications may depend on packages; packages must not depend on applications. HTTP and MCP must not independently implement domain rules.
@@ -66,11 +76,11 @@ cosine-vector indexes. Both parent/version pairs enforce same-tenant/current-ver
 The application process never migrates implicitly: Compose orders PostgreSQL
 health, one-shot migration completion, then API startup.
 
-Repository-owned content has three explicit lifecycles. `content/default` is the packaged
+Repository-owned content has three explicit lifecycles. `products/brain/content/default` is the packaged
 canonical built-in Skill bundle, with executable documents at `<slug>/SKILL.md` and optional
-validated references. `examples/northstar` is a packaged, text-only fictional example whose
+validated references. `products/brain/examples/northstar` is a packaged, text-only fictional example whose
 manifest drives the explicit idempotent database seed while retaining immutable history and
-stable UUIDs. `tests/fixtures/dummy` is provider-neutral content-only test data and is neither
+stable UUIDs. `products/brain/tests/fixtures/dummy` is provider-neutral content-only test data and is neither
 a production default nor a database seed.
 
 ## Durable Data Rules

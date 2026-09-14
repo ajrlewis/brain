@@ -1,8 +1,8 @@
 {
-  "name": "brain",
+  "name": "mind",
   "private": true,
   "workspaces": [
-    "apps/web"
+    "products/*/apps/web"
   ],
   "scripts": {
     "web:dev": "npm run dev --workspace @brain/web",

@@ -1,12 +1,13 @@
 # Workflow
 
-`README.md` is Brain's target-state product specification. `.agents/ARCHITECTURE.md`
-records the implemented identity/access, governed knowledge, Skill persistence, and web console slices;
-do not describe later search components as implemented or proposed commands as verified.
+`README.md` defines the Mind product workspace. `products/brain/README.md` is Brain's
+target-state product specification, and `products/cortex/README.md` is the Cortex specification.
+`.agents/ARCHITECTURE.md` records implemented slices; do not describe specifications as
+implemented or proposed commands as verified.
 
 ## Change Loop
 
-1. Read the relevant parts of `README.md`, the current implementation, tests, and agent guidance.
+1. Read the relevant product specification, current implementation, tests, and agent guidance.
 2. Preserve Brain's agent-agnostic storage boundary and make the smallest change that satisfies the task.
 3. Add or update focused tests for changed behavior, including failure and authorization paths where relevant.
 4. Run the relevant verified commands from `.agents/COMMANDS.md`.
@@ -15,12 +16,12 @@ do not describe later search components as implemented or proposed commands as v
 
 ## Python And TypeScript Changes
 
-- Python applications and packages use uv, Ruff, Pyright, and pytest. Keep unit/e2e tests in
-  `tests/` and dependency-backed PostgreSQL behavior behind the `integration` marker.
-- The TypeScript application is the npm workspace at `apps/web`. Use ESLint, TypeScript's
+- Python applications and packages use uv, Ruff, Pyright, and pytest. Brain tests live in
+  `products/brain/tests/`, with dependency-backed PostgreSQL behavior behind the `integration` marker.
+- The implemented TypeScript application is the npm workspace at `products/brain/apps/web`. Use ESLint, TypeScript's
   no-emit check, Vitest with Testing Library for components and server transport behavior,
   and Playwright for browser integration with the real Compose API and Northstar seed.
-- FastAPI schemas are authoritative. Regenerate `apps/web/openapi.json` and the generated Zod
+- FastAPI schemas are authoritative. Regenerate `products/brain/apps/web/openapi.json` and the generated Zod
   validators after public API changes; never hand-edit generated contracts. The drift check
   must pass in CI.
 - Keep backend tokens and local credential validation in server-only modules. Client

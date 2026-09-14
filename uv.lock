@@ -18,7 +18,7 @@ members = [
     "brain-mcp",
     "brain-schemas",
     "brain-search",
-    "brain-workspace",
+    "mind-workspace",
 ]
 
 [[package]]
@@ -100,12 +100,12 @@ wheels = [
 [[package]]
 name = "brain-ai"
 version = "0.1.0"
-source = { editable = "packages/ai" }
+source = { editable = "products/brain/packages/ai" }
 
 [[package]]
 name = "brain-api"
 version = "0.1.0"
-source = { editable = "apps/api" }
+source = { editable = "products/brain/apps/api" }
 dependencies = [
     { name = "brain-auth" },
     { name = "brain-core" },
@@ -118,11 +118,11 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "brain-auth", editable = "packages/auth" },
-    { name = "brain-core", editable = "packages/core" },
-    { name = "brain-db", editable = "packages/db" },
-    { name = "brain-mcp", editable = "apps/mcp" },
-    { name = "brain-schemas", editable = "packages/schemas" },
+    { name = "brain-auth", editable = "products/brain/packages/auth" },
+    { name = "brain-core", editable = "products/brain/packages/core" },
+    { name = "brain-db", editable = "products/brain/packages/db" },
+    { name = "brain-mcp", editable = "products/brain/apps/mcp" },
+    { name = "brain-schemas", editable = "products/brain/packages/schemas" },
     { name = "fastapi", specifier = ">=0.116,<1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.35,<1" },
 ]
@@ -130,12 +130,12 @@ requires-dist = [
 [[package]]
 name = "brain-auth"
 version = "0.1.0"
-source = { editable = "packages/auth" }
+source = { editable = "products/brain/packages/auth" }
 
 [[package]]
 name = "brain-core"
 version = "0.1.0"
-source = { editable = "packages/core" }
+source = { editable = "products/brain/packages/core" }
 dependencies = [
     { name = "brain-ai" },
     { name = "brain-auth" },
@@ -147,18 +147,18 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "brain-ai", editable = "packages/ai" },
-    { name = "brain-auth", editable = "packages/auth" },
-    { name = "brain-db", editable = "packages/db" },
-    { name = "brain-schemas", editable = "packages/schemas" },
-    { name = "brain-search", editable = "packages/search" },
+    { name = "brain-ai", editable = "products/brain/packages/ai" },
+    { name = "brain-auth", editable = "products/brain/packages/auth" },
+    { name = "brain-db", editable = "products/brain/packages/db" },
+    { name = "brain-schemas", editable = "products/brain/packages/schemas" },
+    { name = "brain-search", editable = "products/brain/packages/search" },
     { name = "pydantic-settings", specifier = ">=2.10,<3" },
 ]
 
 [[package]]
 name = "brain-db"
 version = "0.1.0"
-source = { editable = "packages/db" }
+source = { editable = "products/brain/packages/db" }
 dependencies = [
     { name = "alembic" },
     { name = "brain-ai" },
@@ -172,9 +172,9 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.16,<2" },
-    { name = "brain-ai", editable = "packages/ai" },
-    { name = "brain-schemas", editable = "packages/schemas" },
-    { name = "brain-search", editable = "packages/search" },
+    { name = "brain-ai", editable = "products/brain/packages/ai" },
+    { name = "brain-schemas", editable = "products/brain/packages/schemas" },
+    { name = "brain-search", editable = "products/brain/packages/search" },
     { name = "pgvector", specifier = ">=0.4,<1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
     { name = "sqlalchemy", specifier = ">=2.0,<3" },
@@ -183,7 +183,7 @@ requires-dist = [
 [[package]]
 name = "brain-mcp"
 version = "0.1.0"
-source = { editable = "apps/mcp" }
+source = { editable = "products/brain/apps/mcp" }
 dependencies = [
     { name = "anyio" },
     { name = "brain-auth" },
@@ -196,9 +196,9 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "anyio", specifier = ">=4.10,<5" },
-    { name = "brain-auth", editable = "packages/auth" },
-    { name = "brain-core", editable = "packages/core" },
-    { name = "brain-schemas", editable = "packages/schemas" },
+    { name = "brain-auth", editable = "products/brain/packages/auth" },
+    { name = "brain-core", editable = "products/brain/packages/core" },
+    { name = "brain-schemas", editable = "products/brain/packages/schemas" },
     { name = "cryptography", specifier = ">=46,<47" },
     { name = "fastmcp", specifier = ">=2.12,<3" },
 ]
@@ -206,7 +206,7 @@ requires-dist = [
 [[package]]
 name = "brain-schemas"
 version = "0.1.0"
-source = { editable = "packages/schemas" }
+source = { editable = "products/brain/packages/schemas" }
 dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
@@ -221,7 +221,7 @@ requires-dist = [
 [[package]]
 name = "brain-search"
 version = "0.1.0"
-source = { editable = "packages/search" }
+source = { editable = "products/brain/packages/search" }
 dependencies = [
     { name = "pgvector" },
     { name = "sqlalchemy" },
@@ -234,7 +234,7 @@ requires-dist = [
 ]
 
 [[package]]
-name = "brain-workspace"
+name = "mind-workspace"
 version = "0.1.0"
 source = { virtual = "." }
 

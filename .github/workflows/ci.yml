@@ -79,10 +79,12 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
+          file: products/brain/Dockerfile
           target: api
           push: false
       - uses: docker/build-push-action@v6
         with:
           context: .
+          file: products/brain/Dockerfile
           target: web
           push: false

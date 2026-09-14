@@ -19,15 +19,16 @@ CMD ["brain-api"]
 FROM node:22-slim AS web-build
 WORKDIR /app
 COPY package.json package-lock.json ./
-COPY apps/web/package.json apps/web/package.json
+COPY products/brain/apps/web/package.json products/brain/apps/web/package.json
 RUN npm ci
-COPY apps/web apps/web
+COPY products/brain/apps/web products/brain/apps/web
 RUN npm run build:app --workspace @brain/web
 
 FROM node:22-slim AS web
-ENV NODE_ENV=production
+ENV HOSTNAME=0.0.0.0 \
+    NODE_ENV=production
 WORKDIR /app
-COPY --from=web-build /app/apps/web/.next/standalone ./
-COPY --from=web-build /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=web-build /app/products/brain/apps/web/.next/standalone ./
+COPY --from=web-build /app/products/brain/apps/web/.next/static ./products/brain/apps/web/.next/static
 EXPOSE 3000
-CMD ["node", "apps/web/server.js"]
+CMD ["node", "products/brain/apps/web/server.js"]

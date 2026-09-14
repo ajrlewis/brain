@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "contracts": "UV_CACHE_DIR=../../.uv-cache uv run python scripts/export-openapi.py && openapi-zod-client openapi.json -o lib/generated/api.ts --export-schemas --template scripts/api-client.hbs && prettier --write openapi.json lib/generated/api.ts",
+    "contracts": "UV_CACHE_DIR=../../../../.uv-cache uv run python scripts/export-openapi.py && openapi-zod-client openapi.json -o lib/generated/api.ts --export-schemas --template scripts/api-client.hbs && prettier --write openapi.json lib/generated/api.ts",
     "contracts:check": "npm run contracts && git diff --exit-code -- openapi.json lib/generated/api.ts"
   },
   "dependencies": {
