@@ -1,8 +1,27 @@
 # Cortex
 
-> Implementation status: the repository currently provides only a FastAPI health service and a
-> minimal Next.js product shell. The agent runtime and all other capabilities below remain target
-> state unless explicitly documented otherwise in `.agents/ARCHITECTURE.md`.
+> Implementation status: the repository provides a FastAPI service, a minimal Next.js product
+> shell, and a typed HTTP client for Brain health and identity context. The agent runtime and all
+> other capabilities below remain target state unless explicitly documented otherwise in
+> `.agents/ARCHITECTURE.md`.
+
+## Implemented Brain boundary
+
+`cortex-brain` is a Cortex-owned, typed `httpx` client for Brain's public `GET /health` and
+`GET /auth/context` operations. It does not import Brain packages or access Brain persistence.
+The Cortex API constructs and closes the client at the application boundary and keeps its bearer
+credential server-side.
+
+Set `BRAIN_URL` and `BRAIN_API_KEY` together to enable the integration; omit both to run Cortex
+independently. `BRAIN_CONNECT_TIMEOUT_SECONDS` (default 2, maximum 30) and
+`BRAIN_READ_TIMEOUT_SECONDS` (default 5, maximum 60) bound requests. Partial configuration is an
+application configuration error.
+
+`GET /health` remains a local process check and never calls Brain. `GET /health/brain` calls both
+Brain operations but returns only `{"dependency":"brain","status":"..."}`. Success is HTTP 200;
+rejected credentials, malformed responses, and unexpected upstream statuses return HTTP 502 with
+`unauthorized`, `malformed`, or `error`; disabled configuration and network/timeouts return HTTP
+503 with `disabled` or `unavailable`. No raw body, exception, credential, or identity is returned.
 
 Cortex is an AI agent runtime and application for performing knowledge work.
 

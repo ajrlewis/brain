@@ -3,9 +3,14 @@ name = "cortex-api"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
+  "cortex-brain",
   "fastapi>=0.116,<1",
+  "pydantic-settings>=2.10,<3",
   "uvicorn[standard]>=0.35,<1",
 ]
+
+[tool.uv.sources]
+cortex-brain = { workspace = true }
 
 [project.scripts]
 cortex-api = "cortex_api.main:run"

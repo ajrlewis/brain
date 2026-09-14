@@ -92,6 +92,11 @@ services:
       context: .
       dockerfile: products/cortex/Dockerfile
       target: api
+    environment:
+      BRAIN_URL: http://api:8000
+      BRAIN_API_KEY: ${LOCAL_BEARER_TOKEN:-brain-local-dev}
+      BRAIN_CONNECT_TIMEOUT_SECONDS: ${BRAIN_CONNECT_TIMEOUT_SECONDS:-2}
+      BRAIN_READ_TIMEOUT_SECONDS: ${BRAIN_READ_TIMEOUT_SECONDS:-5}
     ports:
       - "${CORTEX_API_PORT:-8100}:8000"
     healthcheck:
