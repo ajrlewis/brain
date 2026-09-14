@@ -9,8 +9,8 @@ safe to use elsewhere.
 
 ## Mind workspace
 
-The root uv and npm workspaces include Brain beneath `products/brain`; Cortex currently has a
-specification but no implementation workspace members.
+The root uv and npm workspaces include Brain beneath `products/brain` and the Cortex foundation
+beneath `products/cortex`.
 
 Verified on 2026-09-14:
 
@@ -28,6 +28,12 @@ Verified on 2026-09-13. The API health response was queried at
 ```bash
 UV_CACHE_DIR="$PWD/.uv-cache" uv run brain-api
 UV_CACHE_DIR="$PWD/.uv-cache" uv run brain-mcp
+```
+
+The minimal Cortex HTTP service exposes `GET /health` on port 8000 when run directly:
+
+```bash
+UV_CACHE_DIR="$PWD/.uv-cache" uv run cortex-api
 ```
 
 Register the running local HTTP MCP endpoint with Codex while keeping the bearer token in the
@@ -120,6 +126,16 @@ npm run web:build
 npm run test:e2e --workspace @brain/web
 ```
 
+Cortex web checks and development commands are:
+
+```bash
+npm run cortex:web:lint
+npm run cortex:web:typecheck
+npm run cortex:web:test
+npm run cortex:web:build
+npm run cortex:web:dev
+```
+
 `web:test` runs Vitest unit/component and mocked server-transport tests. The Playwright browser
 integration expects a running, migrated, Northstar-seeded Compose stack. Prepare it with:
 
@@ -142,6 +158,8 @@ The Compose model and application image build were verified on 2026-09-14:
 ```bash
 docker compose config
 docker build -f products/brain/Dockerfile -t brain:knowledge .
+docker build -f products/cortex/Dockerfile --target api -t cortex:api .
+docker build -f products/cortex/Dockerfile --target web -t cortex:web .
 ```
 
 Run the combined FastAPI and FastMCP HTTP application with PostgreSQL:

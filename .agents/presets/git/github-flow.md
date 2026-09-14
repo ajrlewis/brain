@@ -1,6 +1,6 @@
 # GitHub Flow Preset
 
-Adopted for `ajrlewis/brain`, whose remote default branch is `main`. The repository is solo and does not currently protect `main`; protection and the external-review decision remain tracked in `.agents/todos/TODO.md`.
+Adopted for `ajrlewis/mind`, whose remote default branch is `main`. The repository is solo and does not currently protect `main`; protection and the external-review decision remain tracked in `.agents/todos/TODO.md`.
 
 Use this default when the repository has no documented Git workflow. Existing project-specific policy takes precedence, including an explicitly adopted rebase workflow.
 

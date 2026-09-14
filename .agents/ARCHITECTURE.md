@@ -1,8 +1,8 @@
 # Architecture
 
 `README.md` defines the Mind workspace. `products/brain/README.md` and
-`products/cortex/README.md` are the product specifications. The only implemented product is
-currently Brain: a Python
+`products/cortex/README.md` are the product specifications. Brain is the implemented knowledge
+product: a Python
 3.13 uv workspace with HTTP and MCP interfaces over shared application services, a
 provider-neutral authorization context, and PostgreSQL identity/access plus governed
 knowledge and Skill persistence plus authorization-safe hybrid Page search managed by Alembic.
@@ -13,7 +13,9 @@ Mind is a product monorepo rooted at `products/`. Brain owns governed knowledge 
 Cortex owns agent reasoning and action. Both products remain independently deployable, and
 Cortex must integrate with Brain through Brain's public HTTP or MCP interfaces rather than its
 database or internal packages. Root manifests, Compose, CI, and agent guidance coordinate the
-workspace. No cross-product package has been extracted yet.
+workspace. Cortex currently implements only an independently runnable FastAPI health service and
+Next.js product shell. It has no agent runtime, Brain client, identity, persistence, or model
+provider yet. No cross-product package has been extracted.
 
 ## Brain Purpose And Boundary
 

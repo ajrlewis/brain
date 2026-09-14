@@ -11,7 +11,12 @@
     "web:test": "npm run test --workspace @brain/web",
     "web:build": "npm run build --workspace @brain/web",
     "web:contracts": "npm run contracts --workspace @brain/web",
-    "web:contracts:check": "npm run contracts:check --workspace @brain/web"
+    "web:contracts:check": "npm run contracts:check --workspace @brain/web",
+    "cortex:web:dev": "npm run dev --workspace @cortex/web",
+    "cortex:web:lint": "npm run lint --workspace @cortex/web",
+    "cortex:web:typecheck": "npm run typecheck --workspace @cortex/web",
+    "cortex:web:test": "npm run test --workspace @cortex/web",
+    "cortex:web:build": "npm run build --workspace @cortex/web"
   },
   "allowScripts": {
     "@tailwindcss/oxide@4.1.13": true,

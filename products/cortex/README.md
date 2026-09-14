@@ -1,5 +1,9 @@
 # Cortex
 
+> Implementation status: the repository currently provides only a FastAPI health service and a
+> minimal Next.js product shell. The agent runtime and all other capabilities below remain target
+> state unless explicitly documented otherwise in `.agents/ARCHITECTURE.md`.
+
 Cortex is an AI agent runtime and application for performing knowledge work.
 
 It provides the reasoning, conversation, tool use, workflow execution, context management and user-facing experience required for an AI agent to operate against company systems and organisational knowledge.

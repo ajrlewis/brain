@@ -18,7 +18,8 @@ implemented or proposed commands as verified.
 
 - Python applications and packages use uv, Ruff, Pyright, and pytest. Brain tests live in
   `products/brain/tests/`, with dependency-backed PostgreSQL behavior behind the `integration` marker.
-- The implemented TypeScript application is the npm workspace at `products/brain/apps/web`. Use ESLint, TypeScript's
+- The TypeScript applications are npm workspaces at `products/brain/apps/web` and
+  `products/cortex/apps/web`. Use ESLint, TypeScript's
   no-emit check, Vitest with Testing Library for components and server transport behavior,
   and Playwright for browser integration with the real Compose API and Northstar seed.
 - FastAPI schemas are authoritative. Regenerate `products/brain/apps/web/openapi.json` and the generated Zod
