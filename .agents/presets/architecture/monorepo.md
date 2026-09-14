@@ -1,7 +1,7 @@
 # Monorepo Preset
 
 Adopted for the Mind product monorepo. Brain implements identity/access, governed knowledge,
-Skill persistence, search, and web-console slices. Cortex is specified but not implemented.
+Skill persistence, search, and web-console slices. Cortex implements a minimal API and web shell.
 
 ```text
 products/
@@ -9,7 +9,7 @@ products/
 │   ├── apps/             HTTP, MCP, and web interfaces
 │   ├── packages/         Brain domain and infrastructure packages
 │   └── tests/
-└── cortex/               specification only
+└── cortex/               API and web foundation; agent runtime deferred
 ```
 
 - Create only directories that represent real components. The names above are conventional examples, not mandatory empty scaffolding.

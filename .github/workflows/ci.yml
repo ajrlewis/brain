@@ -30,6 +30,10 @@ jobs:
       - run: npm run web:typecheck
       - run: npm run web:test
       - run: npm run web:build
+      - run: npm run cortex:web:lint
+      - run: npm run cortex:web:typecheck
+      - run: npm run cortex:web:test
+      - run: npm run cortex:web:build
       - run: docker compose up -d --build
       - run: docker compose exec -T api brain-seed-northstar
       - run: npx playwright install --with-deps chromium
@@ -86,5 +90,17 @@ jobs:
         with:
           context: .
           file: products/brain/Dockerfile
+          target: web
+          push: false
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: products/cortex/Dockerfile
+          target: api
+          push: false
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: products/cortex/Dockerfile
           target: web
           push: false

@@ -30,6 +30,7 @@ brain-db = { workspace = true }
 brain-mcp = { workspace = true }
 brain-schemas = { workspace = true }
 brain-search = { workspace = true }
+cortex-api = { workspace = true }
 
 [tool.ruff]
 target-version = "py313"
@@ -59,7 +60,7 @@ markers = [
 
 [tool.coverage.run]
 branch = true
-source = ["brain_api", "brain_auth", "brain_core", "brain_db", "brain_mcp", "brain_schemas"]
+source = ["brain_api", "brain_auth", "brain_core", "brain_db", "brain_mcp", "brain_schemas", "cortex_api"]
 omit = [
   "products/brain/packages/db/src/brain_db/defaults.py",
   "products/brain/packages/db/src/brain_db/seed.py",
