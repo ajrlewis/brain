@@ -36,6 +36,15 @@ The minimal Cortex HTTP service exposes `GET /health` on port 8000 when run dire
 UV_CACHE_DIR="$PWD/.uv-cache" uv run cortex-api
 ```
 
+Set both `BRAIN_URL` and `BRAIN_API_KEY` to enable `GET /health/brain`; the local `GET /health`
+remains independent. With the Compose stack running, the real Cortex-to-Brain HTTP boundary check
+is:
+
+```bash
+CORTEX_TEST_URL=http://127.0.0.1:8100 \
+  UV_CACHE_DIR="$PWD/.uv-cache" uv run pytest products/cortex/tests/e2e/test_brain_boundary.py
+```
+
 Register the running local HTTP MCP endpoint with Codex while keeping the bearer token in the
 client process environment:
 
