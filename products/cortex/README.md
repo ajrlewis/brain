@@ -1,9 +1,29 @@
 # Cortex
 
 > Implementation status: the repository provides a FastAPI service, a minimal Next.js product
-> shell, and a typed HTTP client for Brain health and identity context. The agent runtime and all
-> other capabilities below remain target state unless explicitly documented otherwise in
-> `.agents/ARCHITECTURE.md`.
+> shell, a typed HTTP client for Brain health and identity context, and a provider-neutral
+> stateless chat-model boundary. The agent runtime and all other capabilities below remain target
+> state unless explicitly documented otherwise in `.agents/ARCHITECTURE.md`.
+
+## Implemented model boundary
+
+`cortex-ai` owns immutable provider-neutral message, response, model identity, optional token
+usage, and failure contracts. Its async `ChatModel` protocol exposes one non-streaming invocation;
+provider SDK types do not cross the package boundary. `ChatTurnService` preserves ordered messages,
+requires the final role to be `user`, invokes its injected model once, and accepts only an
+`assistant` response.
+
+`POST /chat/turn` is stateless. It accepts 1–50 `system`, `user`, or `assistant` messages, each with
+1–8,000 non-whitespace characters, and returns one assistant message plus model identity and
+optional token usage. Invalid request shapes and histories return stable HTTP 422 errors without
+echoing content. Model timeout and unavailability return HTTP 503; rejection, invalid output, and
+unexpected failure return distinct safe HTTP 502 error codes. Provider bodies, exception text,
+credentials, prompts, and hidden reasoning are never returned.
+
+Local and Compose execution inject `cortex-deterministic-v1`. It makes no network calls and emits
+an explicitly synthetic response with deterministic word-count usage. It is a development and CI
+test implementation, not an intelligent or production model. There are no model credentials or
+provider settings in this slice. `GET /health` remains independent of both Brain and model calls.
 
 ## Implemented Brain boundary
 

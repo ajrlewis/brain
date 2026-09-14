@@ -31,6 +31,7 @@ brain-mcp = { workspace = true }
 brain-schemas = { workspace = true }
 brain-search = { workspace = true }
 cortex-api = { workspace = true }
+cortex-ai = { workspace = true }
 cortex-brain = { workspace = true }
 
 [tool.ruff]
@@ -61,7 +62,7 @@ markers = [
 
 [tool.coverage.run]
 branch = true
-source = ["brain_api", "brain_auth", "brain_core", "brain_db", "brain_mcp", "brain_schemas", "cortex_api", "cortex_brain"]
+source = ["brain_api", "brain_auth", "brain_core", "brain_db", "brain_mcp", "brain_schemas", "cortex_ai", "cortex_api", "cortex_brain"]
 omit = [
   "products/brain/packages/db/src/brain_db/defaults.py",
   "products/brain/packages/db/src/brain_db/seed.py",
