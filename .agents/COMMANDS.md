@@ -36,6 +36,10 @@ The minimal Cortex HTTP service exposes `GET /health` on port 8000 when run dire
 UV_CACHE_DIR="$PWD/.uv-cache" uv run cortex-api
 ```
 
+It defaults to the hermetic deterministic model. To opt into the non-streaming OpenAI Responses
+adapter, also set `MODEL_BACKEND=openai`, `OPENAI_API_KEY`, and `OPENAI_MODEL`; the ordinary test
+suite does not require or consume these values.
+
 It also exposes the stateless deterministic-model route `POST /chat/turn`. With Compose running,
 the real boundary check is:
 

@@ -1,16 +1,18 @@
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
 
 from cortex_ai import (
+    ChatMessage,
     ChatTurnService,
     InvalidModelOutput,
     ModelRejectedRequest,
     ModelResponse,
     ModelTimeout,
     ModelUnavailable,
+    TokenUsage,
 )
 from cortex_api import create_app
 from cortex_api.settings import Settings
@@ -127,6 +129,84 @@ def test_brain_diagnostic_reports_disabled_integration() -> None:
 def test_partial_brain_configuration_is_invalid() -> None:
     with pytest.raises(ValueError, match="configured together"):
         Settings(brain_url="http://brain.test")
+
+
+def test_model_settings_default_to_deterministic() -> None:
+    settings = Settings()
+
+    assert settings.model_backend == "deterministic"
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"model_backend": "unknown"},
+        {"model_backend": "openai"},
+        {"model_backend": "openai", "openai_api_key": "secret"},
+        {"model_backend": "openai", "openai_api_key": "   ", "openai_model": "gpt-test"},
+        {"openai_timeout_seconds": 0.09},
+        {"openai_timeout_seconds": 121},
+    ],
+)
+def test_invalid_model_configuration_is_rejected(values: dict[str, object]) -> None:
+    with pytest.raises(ValueError):
+        Settings(**values)
+
+
+def test_complete_openai_configuration_is_valid() -> None:
+    settings = Settings(
+        model_backend="openai",
+        openai_api_key="synthetic-secret",
+        openai_model="gpt-test",
+        openai_timeout_seconds=5,
+    )
+
+    assert settings.openai_model == "gpt-test"
+
+
+def test_owned_openai_model_is_injected_and_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeModel:
+        closed = False
+
+        async def invoke(self, _: Sequence[ChatMessage]) -> ModelResponse:
+            return ModelResponse(
+                message=ChatMessage(role="assistant", content="fake answer"),
+                model="fake-openai",
+                usage=TokenUsage(input_tokens=1, output_tokens=2),
+            )
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    fake_model = FakeModel()
+    creation_options: dict[str, object] = {}
+
+    def create_fake_model(**options: object) -> FakeModel:
+        creation_options.update(options)
+        return fake_model
+
+    monkeypatch.setattr("cortex_api.app.create_openai_chat_model", create_fake_model)
+    app = create_app(
+        settings=Settings(
+            model_backend="openai", openai_api_key="synthetic-secret", openai_model="gpt-test"
+        )
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/chat/turn", json={"messages": [{"role": "user", "content": "hello"}]}
+        )
+        assert response.json()["model"] == "fake-openai"
+        assert not fake_model.closed
+    assert fake_model.closed
+    assert creation_options == {
+        "api_key": "synthetic-secret",
+        "model": "gpt-test",
+        "timeout_seconds": 30.0,
+        "base_url": None,
+        "organization": None,
+        "project": None,
+    }
 
 
 def test_enabled_settings_construct_application_client() -> None:

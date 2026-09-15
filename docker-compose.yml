@@ -97,6 +97,7 @@ services:
       BRAIN_API_KEY: ${LOCAL_BEARER_TOKEN:-brain-local-dev}
       BRAIN_CONNECT_TIMEOUT_SECONDS: ${BRAIN_CONNECT_TIMEOUT_SECONDS:-2}
       BRAIN_READ_TIMEOUT_SECONDS: ${BRAIN_READ_TIMEOUT_SECONDS:-5}
+      MODEL_BACKEND: deterministic
     ports:
       - "${CORTEX_API_PORT:-8100}:8000"
     healthcheck:
