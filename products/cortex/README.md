@@ -1,9 +1,32 @@
 # Cortex
 
 > Implementation status: the repository provides a FastAPI service, a minimal Next.js product
-> shell, a typed HTTP client for Brain health and identity context, and a provider-neutral
+> conversation application, a typed HTTP client for Brain health and identity context, and a provider-neutral
 > chat-model boundary plus durable authenticated conversations. The agent runtime and all other capabilities below remain target
 > state unless explicitly documented otherwise in `.agents/ARCHITECTURE.md`.
+
+## Implemented web conversation flow
+
+The Cortex Next.js application provides a minimal local authenticated conversation workspace. A
+local user can sign in, create a conversation, submit one bounded non-streaming turn, navigate
+away, and reopen the backend's canonical ordered history. Conversation titles are not inferred
+from message content; untitled conversations use a stable ID-based label. Empty, loading,
+missing, conflict, history-full, timeout, unavailable, rejected, malformed-response, and
+unexpected-failure states are explicit and safe.
+
+The browser talks only to Next.js Server Components, route handlers, and server actions. Those
+server-only modules call Cortex's public create/list/get/append HTTP API using checked-in Zod
+validators generated from FastAPI OpenAPI. Requests are bounded, uncached, and never retry. The
+API bearer, local password, and signed-session secret are never placed in client code or cookies;
+the cookie contains only a signed opaque authentication marker and is HTTP-only, same-site lax, and secure when
+served through HTTPS.
+
+Host development uses `CORTEX_API_URL`, `CORTEX_API_BEARER_TOKEN`, `CORTEX_WEB_USER`,
+`CORTEX_WEB_PASSWORD`, and `CORTEX_WEB_SESSION_SECRET`. Compose sets the API URL to the internal
+`cortex-api` service while browsers use the published Cortex web port. These names and the
+`cortex-session` cookie are separate from Brain. This is development authentication only;
+production SSO, provisioning, roles, password management, shared Brain sessions, streaming,
+automatic titles, retries, and optimistic messages remain deferred.
 
 ## Implemented durable conversations
 

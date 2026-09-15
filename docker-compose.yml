@@ -151,13 +151,19 @@ services:
       context: .
       dockerfile: products/cortex/Dockerfile
       target: web
+    environment:
+      CORTEX_API_URL: http://cortex-api:8000
+      CORTEX_API_BEARER_TOKEN: ${CORTEX_LOCAL_BEARER_TOKEN:-cortex-local-dev}
+      CORTEX_WEB_USER: ${CORTEX_WEB_USER:-cortex-user}
+      CORTEX_WEB_PASSWORD: ${CORTEX_WEB_PASSWORD:-cortex-local-dev}
+      CORTEX_WEB_SESSION_SECRET: ${CORTEX_WEB_SESSION_SECRET:-cortex-local-session-secret}
     ports:
       - "${CORTEX_WEB_PORT:-3100}:3000"
     depends_on:
       cortex-api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3000').then(r=>{if(!r.ok)process.exit(1)})"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/sign-in').then(r=>{if(!r.ok)process.exit(1)})"]
       interval: 2s
       timeout: 5s
       retries: 15

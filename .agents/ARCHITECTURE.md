@@ -13,8 +13,8 @@ Mind is a product monorepo rooted at `products/`. Brain owns governed knowledge 
 Cortex owns agent reasoning and action. Both products remain independently deployable, and
 Cortex must integrate with Brain through Brain's public HTTP or MCP interfaces rather than its
 database or internal packages. Root manifests, Compose, CI, and agent guidance coordinate the
-workspace. Cortex implements an independently runnable FastAPI health service, Next.js product
-shell, and the responsibility-focused `cortex-brain` HTTP client package. The Cortex application
+workspace. Cortex implements an independently runnable FastAPI health service, Next.js conversation
+application, and the responsibility-focused `cortex-brain` HTTP client package. The Cortex application
 owns the client lifecycle and uses Brain's public health and authenticated identity-context routes
 through bounded requests. Its dependency diagnostic exposes safe status categories while local
 health remains dependency-free. The provider-neutral `cortex-ai` package defines immutable
@@ -29,6 +29,12 @@ optimistic versions to publish each user/assistant pair atomically without holdi
 during the model call. Cortex has no agent runtime, production identity implementation, or
 additional production model provider yet. No
 cross-product package has been extracted.
+
+The Cortex web application uses a separate signed HTTP-only local session and server-only Cortex
+API bearer. Server Components and actions call only the public conversation HTTP contract through
+generated OpenAPI Zod validation. The browser can create, list, reopen, and append non-streaming
+turns without optimistic durable messages or direct backend access. Brain credentials, identity,
+APIs, and sessions are not used by Cortex web.
 
 ## Brain Purpose And Boundary
 

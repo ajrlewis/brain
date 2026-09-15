@@ -1,0 +1,7 @@
+import Link from "next/link";
+import { newConversation } from "@/app/actions";
+import type { ConversationSummary } from "@/lib/api";
+export function conversationLabel(item: ConversationSummary) { return item.title || `Conversation ${item.id.slice(0, 8)}`; }
+export function ConversationShell({ conversations, activeId, user, children }: { conversations: ConversationSummary[]; activeId?: string; user: string; children: React.ReactNode }) {
+  return <div className="app-shell"><a className="skip-link" href="#conversation">Skip to conversation</a><aside className="sidebar"><div className="brand"><span className="brand-mark">C</span><span>Cortex</span></div><form action={newConversation}><button className="primary new-button" type="submit">New conversation</button></form><nav aria-label="Conversations"><p className="nav-label">Recent</p>{conversations.length ? <ol className="conversation-list">{conversations.map((item) => <li key={item.id}><Link aria-current={activeId === item.id ? "page" : undefined} href={`/conversations/${item.id}`}>{conversationLabel(item)}</Link></li>)}</ol> : <p className="muted">No conversations yet.</p>}</nav><div className="account"><span title={user}>{user}</span><form action="/api/auth/sign-out" method="post"><button type="submit" className="text-button">Sign out</button></form></div></aside><main id="conversation" className="conversation-main">{children}</main></div>;
+}
