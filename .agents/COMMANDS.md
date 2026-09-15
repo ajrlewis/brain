@@ -171,7 +171,12 @@ npm run cortex:web:typecheck
 npm run cortex:web:test
 npm run cortex:web:build
 npm run cortex:web:dev
+npm run cortex:web:contracts:check
+npm run test:e2e --workspace @cortex/web
 ```
+
+The Cortex Playwright flow expects the running Compose stack and exercises local sign-in,
+conversation creation, a deterministic atomic turn, navigation, and reopening persisted history.
 
 `web:test` runs Vitest unit/component and mocked server-transport tests. The Playwright browser
 integration expects a running, migrated, Northstar-seeded Compose stack. Prepare it with:
