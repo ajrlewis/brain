@@ -1,6 +1,6 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Literal, cast
+from typing import Literal, Protocol, cast
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from cortex_ai import (
+    ChatModel,
     ChatTurnRequest,
     ChatTurnResponse,
     ChatTurnService,
@@ -17,6 +18,7 @@ from cortex_ai import (
     ModelRejectedRequest,
     ModelTimeout,
     ModelUnavailable,
+    create_openai_chat_model,
 )
 from cortex_api.settings import Settings, get_settings
 from cortex_brain import (
@@ -26,6 +28,10 @@ from cortex_brain import (
     BrainUnavailable,
     BrainUnexpectedResponse,
 )
+
+
+class AsyncCloseable(Protocol):
+    async def aclose(self) -> None: ...
 
 
 class HealthResponse(BaseModel):
@@ -49,6 +55,22 @@ def _create_brain_client(settings: Settings) -> BrainClient | None:
     )
 
 
+def _create_chat_model(settings: Settings) -> tuple[ChatModel, AsyncCloseable | None]:
+    if settings.model_backend == "deterministic":
+        return DeterministicChatModel(), None
+    assert settings.openai_api_key is not None
+    assert settings.openai_model is not None
+    model = create_openai_chat_model(
+        api_key=settings.openai_api_key.get_secret_value(),
+        model=settings.openai_model,
+        timeout_seconds=settings.openai_timeout_seconds,
+        base_url=str(settings.openai_base_url) if settings.openai_base_url is not None else None,
+        organization=settings.openai_organization,
+        project=settings.openai_project,
+    )
+    return model, model
+
+
 def create_app(
     *,
     settings: Settings | None = None,
@@ -57,13 +79,20 @@ def create_app(
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     resolved_client = brain_client or _create_brain_client(resolved_settings)
-    resolved_chat_service = chat_service or ChatTurnService(DeterministicChatModel())
+    owned_model: AsyncCloseable | None = None
+    if chat_service is None:
+        model, owned_model = _create_chat_model(resolved_settings)
+        resolved_chat_service = ChatTurnService(model)
+    else:
+        resolved_chat_service = chat_service
 
     @asynccontextmanager
-    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
         yield
         if resolved_client is not None:
             await resolved_client.aclose()
+        if owned_model is not None:
+            await owned_model.aclose()
 
     app = FastAPI(title="Cortex", version="0.1.0", lifespan=lifespan)
     app.state.brain_client = resolved_client

@@ -19,9 +19,12 @@ owns the client lifecycle and uses Brain's public health and authenticated ident
 through bounded requests. Its dependency diagnostic exposes safe status categories while local
 health remains dependency-free. The provider-neutral `cortex-ai` package defines immutable
 single-turn chat contracts, controlled model errors, an async non-streaming protocol, and a
-deterministic synthetic implementation. Cortex exposes a stateless `POST /chat/turn` through an
-injected application service. Cortex has no agent runtime, identity implementation, persistence,
-or production model provider yet. No cross-product package has been extracted.
+deterministic synthetic implementation plus a bounded, no-retry OpenAI Responses API adapter.
+Cortex exposes a stateless `POST /chat/turn` through an injected application service. The
+application owns and closes configured provider clients while directly injected clients remain
+caller-owned; deterministic remains the local, Compose, and CI default. Cortex has no agent
+runtime, identity implementation, persistence, or additional production model provider yet. No
+cross-product package has been extracted.
 
 ## Brain Purpose And Boundary
 

@@ -15,6 +15,7 @@ from cortex_ai.models import (
     ModelResponse,
     TokenUsage,
 )
+from cortex_ai.openai import OpenAIChatModel, create_openai_chat_model
 from cortex_ai.service import ChatTurnService, InvalidChatHistory
 
 __all__ = [
@@ -33,5 +34,7 @@ __all__ = [
     "ModelResponse",
     "ModelTimeout",
     "ModelUnavailable",
+    "OpenAIChatModel",
     "TokenUsage",
+    "create_openai_chat_model",
 ]

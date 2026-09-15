@@ -20,10 +20,30 @@ echoing content. Model timeout and unavailability return HTTP 503; rejection, in
 unexpected failure return distinct safe HTTP 502 error codes. Provider bodies, exception text,
 credentials, prompts, and hidden reasoning are never returned.
 
-Local and Compose execution inject `cortex-deterministic-v1`. It makes no network calls and emits
+`MODEL_BACKEND` selects `deterministic` (the default) or `openai`. Local, Compose, and CI execution
+use `cortex-deterministic-v1`. It makes no network calls and emits
 an explicitly synthetic response with deterministic word-count usage. It is a development and CI
-test implementation, not an intelligent or production model. There are no model credentials or
-provider settings in this slice. `GET /health` remains independent of both Brain and model calls.
+test implementation, not an intelligent or production model. `GET /health` remains independent of
+both Brain and model calls.
+
+The production adapter uses the official OpenAI Python SDK's async, non-streaming Responses API.
+Select it with `MODEL_BACKEND=openai` and set both `OPENAI_API_KEY` and `OPENAI_MODEL` to nonblank
+values. `OPENAI_TIMEOUT_SECONDS` defaults to 30 seconds and accepts 0.1–120 seconds. Optional
+`OPENAI_BASE_URL`, `OPENAI_ORGANIZATION`, and `OPENAI_PROJECT` settings support explicit endpoint
+and account routing. The application constructs one shared client during application creation and
+closes it on shutdown; clients injected directly into the adapter remain caller-owned.
+
+Each turn sends the supplied `system`, `user`, and `assistant` messages in order with `store=false`.
+The adapter accepts exactly one completed assistant text output, returning the provider's model
+identifier and optional input/output token counts. Authentication, permission, and invalid-request
+failures map to request rejection; rate limits and provider/server or connectivity failures map to
+model unavailability; SDK timeouts map to model timeout. There are no Cortex or SDK retries,
+fallback, startup probes, or health probes. Provider messages and response bodies never cross the
+adapter.
+
+The normal test suite is hermetic and does not use a credential. There is currently no live smoke
+test; exercise a real account only by explicitly configuring the OpenAI settings and making a
+`POST /chat/turn` request outside CI.
 
 ## Implemented Brain boundary
 
