@@ -5,7 +5,7 @@ from typing import Annotated, Literal, Protocol, cast
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from cortex_ai import (
@@ -29,6 +29,8 @@ from cortex_api.conversations import (
     ConversationNotFound,
     ConversationResponse,
     ConversationService,
+    ConversationStreamCompleted,
+    ConversationTextDelta,
     StaleConversationError,
 )
 from cortex_api.settings import Settings, get_settings
@@ -236,6 +238,55 @@ def create_app(
             return JSONResponse(status_code=502, content={"error": "model_rejected_request"})
         except Exception:
             return JSONResponse(status_code=502, content={"error": "conversation_error"})
+
+    @app.post(
+        "/conversations/{conversation_id}/turns/stream",
+        response_class=StreamingResponse,
+        tags=["conversations"],
+    )
+    async def stream_conversation_turn(
+        conversation_id: uuid.UUID,
+        request_body: AppendTurnRequest,
+        request: Request,
+        identity: Annotated[CallerIdentity, Depends(caller)],
+    ) -> StreamingResponse:
+        async def events() -> AsyncGenerator[str]:
+            try:
+                async for event in resolved_conversation_service.stream_turn(
+                    identity.owner_id, conversation_id, request_body.content
+                ):
+                    if await request.is_disconnected():
+                        return
+                    if isinstance(event, ConversationTextDelta):
+                        yield f"event: delta\ndata: {event.model_dump_json()}\n\n"
+                    elif isinstance(event, ConversationStreamCompleted):
+                        yield f"event: completed\ndata: {event.model_dump_json()}\n\n"
+            except ConversationNotFound:
+                yield 'event: error\ndata: {"error":"conversation_not_found"}\n\n'
+            except StaleConversationError:
+                yield 'event: error\ndata: {"error":"conversation_conflict"}\n\n'
+            except ConversationHistoryFull:
+                yield 'event: error\ndata: {"error":"conversation_history_full"}\n\n'
+            except ModelTimeout:
+                yield 'event: error\ndata: {"error":"model_timeout"}\n\n'
+            except ModelUnavailable:
+                yield 'event: error\ndata: {"error":"model_unavailable"}\n\n'
+            except InvalidModelOutput:
+                yield 'event: error\ndata: {"error":"invalid_model_response"}\n\n'
+            except ModelRejectedRequest:
+                yield 'event: error\ndata: {"error":"model_rejected_request"}\n\n'
+            except Exception:
+                yield 'event: error\ndata: {"error":"conversation_error"}\n\n'
+
+        return StreamingResponse(
+            events(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-store",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     @app.get("/health/brain", response_model=BrainDiagnosticResponse, tags=["system"])
     async def brain_health(request: Request) -> BrainDiagnosticResponse | JSONResponse:

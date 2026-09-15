@@ -35,12 +35,16 @@ h1, h2 { font-family: Georgia, serif; font-weight: 400; }
 .message { max-width: 85%; padding: 1rem 1.1rem; border: 1px solid #34382f; border-radius: .8rem; background: #171a15; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 .message-user { align-self: end; background: #293324; }
 .message-role { margin-bottom: .45rem; }
+.transient-turn { display: contents; }
+.transient { border-style: dashed; opacity: .9; }
 .empty-message { margin: auto; padding: 4rem 0; text-align: center; color: #b9b9ad; }
 .empty-message h2 { margin: 0; color: #f3f1e8; font-size: 2rem; }
 .composer { position: sticky; bottom: 0; display: grid; gap: .55rem; padding: 1rem clamp(1.25rem, 4vw, 4rem) 1.25rem; border-top: 1px solid #34382f; background: rgba(16,18,15,.96); }
 .composer label, .sign-in-form label { display: grid; gap: .45rem; color: #d5d5ca; font-size: .85rem; font-weight: 700; }
 .composer textarea, .sign-in-form input { width: 100%; border: 1px solid #454a40; border-radius: .65rem; padding: .8rem; background: #171a15; color: #fff; resize: vertical; }
 .composer-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.composer-footer > div { display: flex; align-items: center; gap: 1rem; }
+.stop-button { padding: .5rem; }
 .sign-in { display: grid; min-height: 100vh; place-items: center; padding: 1.5rem; }
 .sign-in-panel { width: min(30rem, 100%); padding: clamp(1.5rem, 5vw, 3rem); border: 1px solid #34382f; border-radius: 1rem; background: #171a15; }
 .sign-in-panel h1 { margin: .5rem 0; font-size: clamp(2.5rem, 8vw, 4.5rem); line-height: .95; letter-spacing: -.04em; }

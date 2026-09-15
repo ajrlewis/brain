@@ -247,6 +247,15 @@ def test_chat_turn_uses_deterministic_model() -> None:
     }
 
 
+def test_streaming_turn_requires_authentication() -> None:
+    response = TestClient(create_app()).post(
+        "/conversations/10000000-0000-4000-8000-000000000001/turns/stream",
+        json={"content": "hello"},
+    )
+    assert response.status_code == 401
+    assert response.json() == {"error": "unauthorized"}
+
+
 @pytest.mark.parametrize(
     ("payload", "expected_error"),
     [

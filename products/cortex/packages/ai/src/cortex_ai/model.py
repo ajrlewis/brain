@@ -1,11 +1,21 @@
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from typing import Protocol
 
-from cortex_ai.models import MAX_MESSAGE_CHARACTERS, ChatMessage, ModelResponse, TokenUsage
+from cortex_ai.models import (
+    MAX_MESSAGE_CHARACTERS,
+    AssistantTextDelta,
+    ChatMessage,
+    ModelResponse,
+    ModelStreamCompleted,
+    TokenUsage,
+)
 
 
 class ChatModel(Protocol):
     async def invoke(self, messages: Sequence[ChatMessage]) -> ModelResponse: ...
+    def stream(
+        self, messages: Sequence[ChatMessage]
+    ) -> AsyncIterator[AssistantTextDelta | ModelStreamCompleted]: ...
 
 
 class DeterministicChatModel:
@@ -25,3 +35,13 @@ class DeterministicChatModel:
                 output_tokens=len(content.split()),
             ),
         )
+
+    async def stream(
+        self, messages: Sequence[ChatMessage]
+    ) -> AsyncIterator[AssistantTextDelta | ModelStreamCompleted]:
+        response = await self.invoke(messages)
+        midpoint = max(1, len(response.message.content) // 2)
+        for text in (response.message.content[:midpoint], response.message.content[midpoint:]):
+            if text:
+                yield AssistantTextDelta(text=text)
+        yield ModelStreamCompleted(model=response.model, usage=response.usage)

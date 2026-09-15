@@ -21,6 +21,18 @@ from cortex_ai import (
 )
 
 
+async def test_deterministic_stream_emits_ordered_deltas_and_terminal_metadata() -> None:
+    events = [
+        event
+        async for event in DeterministicChatModel().stream(
+            [ChatMessage(role="user", content="hello stream")]
+        )
+    ]
+    assert len(events) == 3
+    assert "".join(event.text for event in events[:-1]) == "Synthetic response to: hello stream"
+    assert events[-1].model == "cortex-deterministic-v1"
+
+
 class RecordingModel:
     def __init__(self) -> None:
         self.calls: list[Sequence[ChatMessage]] = []

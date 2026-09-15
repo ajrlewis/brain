@@ -90,6 +90,10 @@ async def test_service_create_list_reopen_and_append(service: ConversationServic
         "assistant",
     ]
 
+    events = [event async for event in service.stream_turn("owner-a", created.id, "stream me")]
+    assert len(events) == 3
+    assert events[-1].conversation.messages[-1].content == "Synthetic response to: stream me"
+
 
 async def test_service_hides_missing_and_bounds_history(service: ConversationService) -> None:
     with pytest.raises(ConversationNotFound):
@@ -106,3 +110,10 @@ async def test_service_hides_missing_and_bounds_history(service: ConversationSer
     ]
     with pytest.raises(ConversationHistoryFull):
         await service.append_turn("owner-a", FakeRepository.conversation.id, "too much")
+
+
+async def test_cancelled_stream_does_not_publish_partial_turn(service: ConversationService) -> None:
+    stream = service.stream_turn("owner-a", FakeRepository.conversation.id, "cancel me")
+    await anext(stream)
+    await stream.aclose()
+    assert FakeRepository.messages == []

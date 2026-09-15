@@ -26,8 +26,10 @@ caller-owned; deterministic remains the local, Compose, and CI default. Cortex a
 local bearer caller identity and durable public Conversation/message persistence in a separate
 PostgreSQL database through `cortex-auth` and `cortex-state`. Thin authenticated HTTP routes use
 optimistic versions to publish each user/assistant pair atomically without holding a transaction
-during the model call. Cortex has no agent runtime, production identity implementation, or
-additional production model provider yet. No
+during the model call or stream. Authenticated POST SSE passes provider-neutral text deltas through
+a validating same-origin Next.js proxy; partial turns remain transient, and only a valid terminal
+model result is atomically published with a 32,000-character assistant cap. Cortex has no agent
+runtime, production identity implementation, or additional production model provider yet. No
 cross-product package has been extracted.
 
 The Cortex web application uses a separate signed HTTP-only local session and server-only Cortex

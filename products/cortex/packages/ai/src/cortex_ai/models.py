@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 MAX_MESSAGES = 50
 MAX_MESSAGE_CHARACTERS = 8_000
+MAX_ASSISTANT_RESPONSE_CHARACTERS = 32_000
 
 MessageText = Annotated[
     str,
@@ -32,6 +33,17 @@ class ModelResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     message: ChatMessage
+    model: ModelIdentity
+    usage: TokenUsage | None = None
+
+
+class AssistantTextDelta(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    text: Annotated[str, StringConstraints(min_length=1)]
+
+
+class ModelStreamCompleted(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
     model: ModelIdentity
     usage: TokenUsage | None = None
 

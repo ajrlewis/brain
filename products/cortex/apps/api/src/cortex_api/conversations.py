@@ -1,15 +1,19 @@
 import uuid
+from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from cortex_ai import (
+    MAX_ASSISTANT_RESPONSE_CHARACTERS,
+    AssistantTextDelta,
     ChatMessage,
     ChatModel,
     ChatTurnResponse,
     InvalidModelOutput,
     ModelResponse,
+    ModelStreamCompleted,
     TokenUsage,
 )
 from cortex_state import (
@@ -62,6 +66,18 @@ class AppendTurnRequest(BaseModel):
 
 
 class AppendTurnResponse(BaseModel):
+    conversation: ConversationResponse
+    model: str
+    usage: TokenUsage | None = None
+
+
+class ConversationTextDelta(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    text: str
+
+
+class ConversationStreamCompleted(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
     conversation: ConversationResponse
     model: str
     usage: TokenUsage | None = None
@@ -134,6 +150,57 @@ class ConversationService:
             conversation=conversation, model=validated.model, usage=validated.usage
         )
 
+    async def stream_turn(
+        self, owner_id: str, conversation_id: uuid.UUID, content: str
+    ) -> AsyncIterator[ConversationTextDelta | ConversationStreamCompleted]:
+        async with async_session_scope(self._session_factory) as session:
+            snapshot = await ConversationRepository(session).get(owner_id, conversation_id)
+            if snapshot is None:
+                raise ConversationNotFound
+            if len(snapshot.messages) + 1 > 50:
+                raise ConversationHistoryFull
+            observed_version = snapshot.conversation.version
+            history = tuple(
+                ChatMessage(role=message.role, content=message.content)
+                for message in snapshot.messages
+            )
+
+        text_parts: list[str] = []
+        character_count = 0
+        completed: ModelStreamCompleted | None = None
+        async for event in self._model.stream(
+            (*history, ChatMessage(role="user", content=content))
+        ):
+            if completed is not None:
+                raise InvalidModelOutput
+            if isinstance(event, AssistantTextDelta):
+                character_count += len(event.text)
+                if character_count > MAX_ASSISTANT_RESPONSE_CHARACTERS:
+                    raise InvalidModelOutput
+                text_parts.append(event.text)
+                yield ConversationTextDelta(text=event.text)
+            elif isinstance(event, ModelStreamCompleted):
+                completed = event
+            else:
+                raise InvalidModelOutput
+        assistant_content = "".join(text_parts)
+        if completed is None or not assistant_content.strip():
+            raise InvalidModelOutput
+
+        async with async_session_scope(self._session_factory) as session:
+            await ConversationRepository(session).append_turn(
+                owner_id=owner_id,
+                conversation_id=conversation_id,
+                observed_version=observed_version,
+                user_content=content,
+                assistant_content=assistant_content,
+            )
+        yield ConversationStreamCompleted(
+            conversation=await self.get(owner_id, conversation_id),
+            model=completed.model,
+            usage=completed.usage,
+        )
+
     @staticmethod
     def _response(conversation: object, messages: tuple[object, ...]) -> ConversationResponse:
         summary = ConversationSummary.model_validate(conversation)
@@ -154,5 +221,7 @@ __all__ = [
     "ConversationNotFound",
     "ConversationResponse",
     "ConversationService",
+    "ConversationStreamCompleted",
+    "ConversationTextDelta",
     "StaleConversationError",
 ]
