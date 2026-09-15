@@ -8,7 +8,7 @@
 ## Implemented web conversation flow
 
 The Cortex Next.js application provides a minimal local authenticated conversation workspace. A
-local user can sign in, create a conversation, submit one bounded non-streaming turn, navigate
+local user can sign in, create a conversation, watch a bounded streamed turn arrive, navigate
 away, and reopen the backend's canonical ordered history. Conversation titles are not inferred
 from message content; untitled conversations use a stable ID-based label. Empty, loading,
 missing, conflict, history-full, timeout, unavailable, rejected, malformed-response, and
@@ -25,7 +25,7 @@ Host development uses `CORTEX_API_URL`, `CORTEX_API_BEARER_TOKEN`, `CORTEX_WEB_U
 `CORTEX_WEB_PASSWORD`, and `CORTEX_WEB_SESSION_SECRET`. Compose sets the API URL to the internal
 `cortex-api` service while browsers use the published Cortex web port. These names and the
 `cortex-session` cookie are separate from Brain. This is development authentication only;
-production SSO, provisioning, roles, password management, shared Brain sessions, streaming,
+production SSO, provisioning, roles, password management, shared Brain sessions,
 automatic titles, retries, and optimistic messages remain deferred.
 
 ## Implemented durable conversations
@@ -44,13 +44,23 @@ neither message. Missing and cross-owner IDs are indistinguishable. Histories ar
 model-input messages and content at 8,000 characters. Credentials, provider payloads, hidden
 reasoning, exception text, and tool state are never persisted.
 
-Streaming, checkpoints, tools, retries, editing, sharing, title generation, and agent-run state
+Checkpoints, tools, retries, editing, sharing, title generation, and agent-run state
 remain deferred. `POST /chat/turn` stays stateless and unauthenticated for compatibility.
+
+`POST /conversations/{id}/turns/stream` returns `text/event-stream` without replay IDs or automatic
+reconnection. Ordered `delta` events contain only `{"text":"..."}`. One terminal `completed`
+event contains the canonical conversation, model identity, and optional usage; a terminal `error`
+contains one safe error code. Assistant output is capped at 32,000 characters. The service holds
+no database transaction while streaming and publishes the complete user/assistant pair only after
+a valid provider terminal event. Disconnect, cancellation, invalid output, provider failure, or a
+stale commit publishes neither message. The web proxy validates every frame, forwards aborts, and
+shows partial content only in a dashed, explicitly unsaved transient region.
 
 ## Implemented model boundary
 
-`cortex-ai` owns immutable provider-neutral message, response, model identity, optional token
-usage, and failure contracts. Its async `ChatModel` protocol exposes one non-streaming invocation;
+`cortex-ai` owns immutable provider-neutral message, response, streaming-delta/terminal, model
+identity, optional token usage, and failure contracts. Its async `ChatModel` protocol exposes
+streaming and non-streaming invocation;
 provider SDK types do not cross the package boundary. `ChatTurnService` preserves ordered messages,
 requires the final role to be `user`, invokes its injected model once, and accepts only an
 `assistant` response.

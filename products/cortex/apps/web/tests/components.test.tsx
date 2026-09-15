@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 vi.mock("@/app/actions", () => ({ newConversation: vi.fn(), submitTurn: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 import { ConversationShell, conversationLabel } from "@/components/conversation-shell";
 import { Composer } from "@/components/composer";
 const summary = (id: string, title: string | null = null) => ({ id, title, created_at: "2026-09-15T10:00:00Z", updated_at: "2026-09-15T10:00:00Z" });

@@ -5,7 +5,7 @@ vi.mock("@/lib/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
   return { ...actual, getConversation };
 });
-vi.mock("@/components/composer", () => ({ Composer: () => <div>Composer</div> }));
+vi.mock("@/components/composer", () => ({ Composer: ({ initialMessages }: { initialMessages: Array<{ id: string; role: string; content: string }> }) => <section>{initialMessages.length ? initialMessages.map((message) => <article className="message" key={message.id}>{message.content}</article>) : <h2>What are you working on?</h2>}</section> }));
 import ConversationPage from "@/app/conversations/[id]/page";
 
 const base = { id: "10000000-0000-4000-8000-000000000001", title: null, created_at: "2026-09-15T10:00:00Z", updated_at: "2026-09-15T10:00:00Z" };

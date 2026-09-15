@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from typing import cast
 
 from openai import (
@@ -25,7 +25,13 @@ from cortex_ai.errors import (
     ModelTimeout,
     ModelUnavailable,
 )
-from cortex_ai.models import ChatMessage, ModelResponse, TokenUsage
+from cortex_ai.models import (
+    AssistantTextDelta,
+    ChatMessage,
+    ModelResponse,
+    ModelStreamCompleted,
+    TokenUsage,
+)
 
 
 class OpenAIChatModel:
@@ -72,6 +78,62 @@ class OpenAIChatModel:
             raise ModelUnavailable from error
 
         return self._translate_response(response)
+
+    async def stream(
+        self, messages: Sequence[ChatMessage]
+    ) -> AsyncIterator[AssistantTextDelta | ModelStreamCompleted]:
+        provider_messages = cast(
+            list[ResponseInputItemParam],
+            [{"role": message.role, "content": message.content} for message in messages],
+        )
+        terminal = False
+        emitted: list[str] = []
+        try:
+            provider_stream = await self._client.responses.create(
+                model=self._model, input=provider_messages, store=False, stream=True
+            )
+            async for event in provider_stream:
+                event_type = getattr(event, "type", None)
+                if terminal:
+                    raise InvalidModelOutput
+                if event_type == "response.output_text.delta":
+                    delta = getattr(event, "delta", None)
+                    if not isinstance(delta, str) or not delta:
+                        raise InvalidModelOutput
+                    emitted.append(delta)
+                    yield AssistantTextDelta(text=delta)
+                elif event_type == "response.completed":
+                    response = getattr(event, "response", None)
+                    if response is None:
+                        raise InvalidModelOutput
+                    validated = self._translate_response(response)
+                    if "".join(emitted) != validated.message.content:
+                        raise InvalidModelOutput
+                    terminal = True
+                    yield ModelStreamCompleted(model=validated.model, usage=validated.usage)
+                elif event_type in {"response.failed", "response.incomplete", "error"}:
+                    raise InvalidModelOutput
+            if not terminal:
+                raise InvalidModelOutput
+        except (InvalidModelOutput, ModelTimeout, ModelUnavailable, ModelRejectedRequest):
+            raise
+        except APITimeoutError as error:
+            raise ModelTimeout from error
+        except APIResponseValidationError as error:
+            raise InvalidModelOutput from error
+        except (
+            AuthenticationError,
+            PermissionDeniedError,
+            BadRequestError,
+            ConflictError,
+            NotFoundError,
+            UnprocessableEntityError,
+        ) as error:
+            raise ModelRejectedRequest from error
+        except (RateLimitError, APIConnectionError, APIStatusError, APIError) as error:
+            raise ModelUnavailable from error
+        except Exception as error:
+            raise ModelUnavailable from error
 
     @staticmethod
     def _translate_response(response: Response) -> ModelResponse:
