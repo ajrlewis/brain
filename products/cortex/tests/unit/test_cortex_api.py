@@ -1,4 +1,5 @@
 from collections.abc import Callable, Sequence
+from typing import cast
 
 import httpx
 import pytest
@@ -15,6 +16,7 @@ from cortex_ai import (
     TokenUsage,
 )
 from cortex_api import create_app
+from cortex_api.conversations import ConversationService
 from cortex_api.settings import Settings
 from cortex_brain import BrainClient
 
@@ -34,6 +36,20 @@ def test_health() -> None:
 
     assert response.status_code == 200
     assert response.json() == {"service": "cortex-api", "status": "ok"}
+
+
+def test_conversation_routes_require_one_safe_bearer_response() -> None:
+    class UnusedService:
+        async def create(self, _: str) -> object:
+            raise AssertionError("unauthorized requests must not call the service")
+
+    client = TestClient(create_app(conversation_service=cast(ConversationService, UnusedService())))
+
+    for headers in ({}, {"Authorization": "Bearer wrong-secret"}):
+        response = client.post("/conversations", headers=headers)
+        assert response.status_code == 401
+        assert response.json() == {"error": "unauthorized"}
+        assert "wrong-secret" not in response.text
 
 
 def test_local_health_does_not_call_brain() -> None:

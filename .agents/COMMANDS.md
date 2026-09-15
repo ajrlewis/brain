@@ -48,6 +48,14 @@ CORTEX_TEST_URL=http://127.0.0.1:8100 \
   UV_CACHE_DIR="$PWD/.uv-cache" uv run pytest products/cortex/tests/e2e/test_chat_turn.py
 ```
 
+The authenticated durable conversation boundary uses the Cortex-only local token:
+
+```bash
+CORTEX_TEST_URL=http://127.0.0.1:8100 \
+  CORTEX_TEST_BEARER_TOKEN=cortex-local-dev \
+  UV_CACHE_DIR="$PWD/.uv-cache" uv run pytest products/cortex/tests/e2e/test_conversations.py
+```
+
 Set both `BRAIN_URL` and `BRAIN_API_KEY` to enable `GET /health/brain`; the local `GET /health`
 remains independent. With the Compose stack running, the real Cortex-to-Brain HTTP boundary check
 is:
@@ -117,6 +125,13 @@ timeout behavior, and a 100-request HTTP/MCP concurrency exercise with a five-co
 ```bash
 TEST_DATABASE_URL=postgresql://brain:brain@localhost:5432/brain \
   UV_CACHE_DIR="$PWD/.uv-cache" uv run pytest -m integration
+```
+
+Cortex owns a separate migration chain and database. Its focused PostgreSQL suite is:
+
+```bash
+CORTEX_TEST_DATABASE_URL=postgresql://brain:brain@localhost:5432/cortex \
+  UV_CACHE_DIR="$PWD/.uv-cache" uv run pytest products/cortex/tests/integration/test_cortex_postgres.py
 ```
 
 The suite ran 10 PostgreSQL tests on 2026-09-14, including hybrid-search authorization,
@@ -209,6 +224,13 @@ For a host-run migration instead of the one-shot container:
 ```bash
 DATABASE_URL=postgresql+psycopg://brain:brain@localhost:5432/brain \
   UV_CACHE_DIR="$PWD/.uv-cache" uv run alembic -c products/brain/alembic.ini upgrade head
+```
+
+For a host-run Cortex migration:
+
+```bash
+CORTEX_DATABASE_URL=postgresql+psycopg://brain:brain@localhost:5432/cortex \
+  UV_CACHE_DIR="$PWD/.uv-cache" uv run alembic -c products/cortex/alembic.ini upgrade head
 ```
 
 If host port 5432 is already occupied, select another port consistently for Compose and

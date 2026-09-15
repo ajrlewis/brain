@@ -143,18 +143,26 @@ def test_published_brain_contract_contains_typed_client_operations() -> None:
 
 def test_cortex_runtime_does_not_import_brain_implementation_or_persistence() -> None:
     cortex_root = Path(__file__).parents[2]
-    runtime_files = [
+    cortex_files = [
         *cortex_root.glob("apps/api/src/**/*.py"),
-        *cortex_root.glob("packages/brain/src/**/*.py"),
+        *cortex_root.glob("packages/*/src/**/*.py"),
     ]
+    cortex_runtime = "\n".join(path.read_text() for path in cortex_files)
+    for forbidden in ("brain_schemas", "brain_auth", "brain_core", "brain_db"):
+        assert forbidden not in cortex_runtime
 
-    runtime = "\n".join(path.read_text() for path in runtime_files)
-    for forbidden in (
-        "brain_schemas",
-        "brain_auth",
-        "brain_core",
-        "brain_db",
-        "sqlalchemy",
-        "psycopg",
-    ):
-        assert forbidden not in runtime
+    brain_client = "\n".join(
+        path.read_text() for path in cortex_root.glob("packages/brain/src/**/*.py")
+    )
+    for forbidden in ("sqlalchemy", "psycopg", "cortex_state"):
+        assert forbidden not in brain_client
+
+    brain_root = cortex_root.parent / "brain"
+    brain_runtime = "\n".join(
+        path.read_text()
+        for path in [
+            *brain_root.glob("apps/*/src/**/*.py"),
+            *brain_root.glob("packages/*/src/**/*.py"),
+        ]
+    )
+    assert "cortex_" not in brain_runtime

@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Annotated, Literal
 
-from pydantic import Field, HttpUrl, SecretStr, StringConstraints, model_validator
+from pydantic import Field, HttpUrl, PostgresDsn, SecretStr, StringConstraints, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,6 +12,21 @@ class Settings(BaseSettings):
     brain_api_key: SecretStr | None = None
     brain_connect_timeout_seconds: float = Field(default=2.0, gt=0, le=30)
     brain_read_timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    cortex_database_url: PostgresDsn = PostgresDsn(
+        "postgresql+psycopg://brain:brain@localhost:5432/cortex"
+    )
+    database_pool_size: int = Field(default=5, ge=1, le=50)
+    database_max_overflow: int = Field(default=5, ge=0, le=50)
+    database_pool_timeout_seconds: float = Field(default=10, gt=0, le=60)
+    database_pool_recycle_seconds: int = Field(default=1800, ge=30, le=86400)
+    database_statement_timeout_ms: int = Field(default=30000, ge=100, le=120000)
+    database_lock_timeout_ms: int = Field(default=5000, ge=100, le=30000)
+    cortex_local_bearer_token: Annotated[str, StringConstraints(min_length=1, max_length=255)] = (
+        "cortex-local-dev"
+    )
+    cortex_local_owner_id: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)
+    ] = "cortex-local-user"
     model_backend: Literal["deterministic", "openai"] = "deterministic"
     openai_api_key: SecretStr | None = None
     openai_model: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)] | None = (
