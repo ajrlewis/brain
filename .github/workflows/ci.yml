@@ -36,6 +36,7 @@ jobs:
       - run: npm run cortex:web:build
       - run: docker compose up -d --build
       - run: CORTEX_TEST_URL=http://127.0.0.1:8100 uv run pytest products/cortex/tests/e2e/test_brain_boundary.py
+      - run: CORTEX_TEST_URL=http://127.0.0.1:8100 uv run pytest products/cortex/tests/e2e/test_chat_turn.py products/cortex/tests/e2e/test_conversations.py
       - run: docker compose exec -T api brain-seed-northstar
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e --workspace @brain/web
@@ -60,6 +61,7 @@ jobs:
           --health-retries 15
     env:
       TEST_DATABASE_URL: postgresql://brain:brain@localhost:5432/brain
+      CORTEX_TEST_DATABASE_URL: postgresql://brain:brain@localhost:5432/cortex
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -74,6 +76,9 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run pyright
       - run: psql "$TEST_DATABASE_URL" -c "CREATE EXTENSION IF NOT EXISTS vector"
+      - run: createdb -h localhost -U brain -O brain cortex
+        env:
+          PGPASSWORD: brain
       - run: uv run pytest --cov --cov-report=term-missing --cov-report=xml
 
   docker:

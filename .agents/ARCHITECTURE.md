@@ -22,8 +22,12 @@ single-turn chat contracts, controlled model errors, an async non-streaming prot
 deterministic synthetic implementation plus a bounded, no-retry OpenAI Responses API adapter.
 Cortex exposes a stateless `POST /chat/turn` through an injected application service. The
 application owns and closes configured provider clients while directly injected clients remain
-caller-owned; deterministic remains the local, Compose, and CI default. Cortex has no agent
-runtime, identity implementation, persistence, or additional production model provider yet. No
+caller-owned; deterministic remains the local, Compose, and CI default. Cortex additionally owns
+local bearer caller identity and durable public Conversation/message persistence in a separate
+PostgreSQL database through `cortex-auth` and `cortex-state`. Thin authenticated HTTP routes use
+optimistic versions to publish each user/assistant pair atomically without holding a transaction
+during the model call. Cortex has no agent runtime, production identity implementation, or
+additional production model provider yet. No
 cross-product package has been extracted.
 
 ## Brain Purpose And Boundary

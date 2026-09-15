@@ -1,8 +1,9 @@
+import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Literal, Protocol, cast
+from typing import Annotated, Literal, Protocol, cast
 
-from fastapi import FastAPI, Request, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -20,7 +21,18 @@ from cortex_ai import (
     ModelUnavailable,
     create_openai_chat_model,
 )
+from cortex_api.conversations import (
+    AppendTurnRequest,
+    AppendTurnResponse,
+    ConversationHistoryFull,
+    ConversationListResponse,
+    ConversationNotFound,
+    ConversationResponse,
+    ConversationService,
+    StaleConversationError,
+)
 from cortex_api.settings import Settings, get_settings
+from cortex_auth import AuthenticationError, CallerIdentity, LocalBearerAuthenticator
 from cortex_brain import (
     BrainClient,
     BrainMalformedResponse,
@@ -28,6 +40,7 @@ from cortex_brain import (
     BrainUnavailable,
     BrainUnexpectedResponse,
 )
+from cortex_state import create_async_engine, create_async_session_factory
 
 
 class AsyncCloseable(Protocol):
@@ -76,6 +89,7 @@ def create_app(
     settings: Settings | None = None,
     brain_client: BrainClient | None = None,
     chat_service: ChatTurnService | None = None,
+    conversation_service: ConversationService | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     resolved_client = brain_client or _create_brain_client(resolved_settings)
@@ -85,6 +99,23 @@ def create_app(
         resolved_chat_service = ChatTurnService(model)
     else:
         resolved_chat_service = chat_service
+    authenticator = LocalBearerAuthenticator(
+        token=resolved_settings.cortex_local_bearer_token,
+        owner_id=resolved_settings.cortex_local_owner_id,
+    )
+    owned_engine = None
+    if conversation_service is None:
+        owned_engine = create_async_engine(resolved_settings)
+        session_factory = create_async_session_factory(owned_engine)
+        if chat_service is None:
+            conversation_model = model
+        else:
+            conversation_model, additional_owned_model = _create_chat_model(resolved_settings)
+            if additional_owned_model is not None:
+                owned_model = additional_owned_model
+        resolved_conversation_service = ConversationService(session_factory, conversation_model)
+    else:
+        resolved_conversation_service = conversation_service
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
@@ -93,14 +124,29 @@ def create_app(
             await resolved_client.aclose()
         if owned_model is not None:
             await owned_model.aclose()
+        if owned_engine is not None:
+            await owned_engine.dispose()
 
     app = FastAPI(title="Cortex", version="0.1.0", lifespan=lifespan)
     app.state.brain_client = resolved_client
     app.state.chat_service = resolved_chat_service
+    app.state.conversation_service = resolved_conversation_service
+
+    def caller(authorization: Annotated[str | None, Header()] = None) -> CallerIdentity:
+        try:
+            return authenticator.authenticate(authorization)
+        except AuthenticationError:
+            raise HTTPException(status_code=401, detail="unauthorized") from None
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(_: Request, __: RequestValidationError) -> JSONResponse:
         return JSONResponse(status_code=422, content={"error": "invalid_request"})
+
+    @app.exception_handler(HTTPException)
+    async def http_error(_: Request, exception: HTTPException) -> JSONResponse:
+        if exception.status_code == 401:
+            return JSONResponse(status_code=401, content={"error": "unauthorized"})
+        return JSONResponse(status_code=exception.status_code, content={"error": "request_error"})
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     def health() -> HealthResponse:
@@ -118,25 +164,78 @@ def create_app(
                 content={"error": "model_timeout"},
             )
         except ModelUnavailable:
-            return JSONResponse(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                content={"error": "model_unavailable"},
-            )
+            return JSONResponse(status_code=503, content={"error": "model_unavailable"})
         except InvalidModelOutput:
-            return JSONResponse(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                content={"error": "invalid_model_response"},
-            )
+            return JSONResponse(status_code=502, content={"error": "invalid_model_response"})
         except ModelRejectedRequest:
-            return JSONResponse(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                content={"error": "model_rejected_request"},
-            )
+            return JSONResponse(status_code=502, content={"error": "model_rejected_request"})
         except Exception:
-            return JSONResponse(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                content={"error": "model_error"},
+            return JSONResponse(status_code=502, content={"error": "model_error"})
+
+    @app.post(
+        "/conversations",
+        response_model=ConversationResponse,
+        status_code=201,
+        tags=["conversations"],
+    )
+    async def create_conversation(
+        identity: Annotated[CallerIdentity, Depends(caller)],
+    ) -> ConversationResponse:
+        return await resolved_conversation_service.create(identity.owner_id)
+
+    @app.get("/conversations", response_model=ConversationListResponse, tags=["conversations"])
+    async def list_conversations(
+        identity: Annotated[CallerIdentity, Depends(caller)],
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+        offset: Annotated[int, Query(ge=0, le=10_000)] = 0,
+    ) -> ConversationListResponse:
+        return await resolved_conversation_service.list(
+            identity.owner_id, limit=limit, offset=offset
+        )
+
+    @app.get(
+        "/conversations/{conversation_id}",
+        response_model=ConversationResponse,
+        tags=["conversations"],
+    )
+    async def get_conversation(
+        conversation_id: uuid.UUID, identity: Annotated[CallerIdentity, Depends(caller)]
+    ) -> ConversationResponse | JSONResponse:
+        try:
+            return await resolved_conversation_service.get(identity.owner_id, conversation_id)
+        except ConversationNotFound:
+            return JSONResponse(status_code=404, content={"error": "conversation_not_found"})
+
+    @app.post(
+        "/conversations/{conversation_id}/turns",
+        response_model=AppendTurnResponse,
+        tags=["conversations"],
+    )
+    async def append_conversation_turn(
+        conversation_id: uuid.UUID,
+        request: AppendTurnRequest,
+        identity: Annotated[CallerIdentity, Depends(caller)],
+    ) -> AppendTurnResponse | JSONResponse:
+        try:
+            return await resolved_conversation_service.append_turn(
+                identity.owner_id, conversation_id, request.content
             )
+        except ConversationNotFound:
+            return JSONResponse(status_code=404, content={"error": "conversation_not_found"})
+        except StaleConversationError:
+            return JSONResponse(status_code=409, content={"error": "conversation_conflict"})
+        except ConversationHistoryFull:
+            return JSONResponse(status_code=422, content={"error": "conversation_history_full"})
+        except ModelTimeout:
+            return JSONResponse(status_code=503, content={"error": "model_timeout"})
+        except ModelUnavailable:
+            return JSONResponse(status_code=503, content={"error": "model_unavailable"})
+        except InvalidModelOutput:
+            return JSONResponse(status_code=502, content={"error": "invalid_model_response"})
+        except ModelRejectedRequest:
+            return JSONResponse(status_code=502, content={"error": "model_rejected_request"})
+        except Exception:
+            return JSONResponse(status_code=502, content={"error": "conversation_error"})
 
     @app.get("/health/brain", response_model=BrainDiagnosticResponse, tags=["system"])
     async def brain_health(request: Request) -> BrainDiagnosticResponse | JSONResponse:

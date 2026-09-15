@@ -2,8 +2,27 @@
 
 > Implementation status: the repository provides a FastAPI service, a minimal Next.js product
 > shell, a typed HTTP client for Brain health and identity context, and a provider-neutral
-> stateless chat-model boundary. The agent runtime and all other capabilities below remain target
+> chat-model boundary plus durable authenticated conversations. The agent runtime and all other capabilities below remain target
 > state unless explicitly documented otherwise in `.agents/ARCHITECTURE.md`.
+
+## Implemented durable conversations
+
+Cortex owns a separate PostgreSQL database named `cortex`, Cortex-only SQLAlchemy metadata, and
+an explicit Alembic lifecycle. Applications never migrate at startup. All `/conversations`
+operations require the configured local bearer token, which maps server-side to one opaque owner;
+identity is never accepted from requests. Missing and invalid credentials return the same safe
+unauthorized response. Production identity remains deferred.
+
+The API creates empty conversations, lists only the caller's conversations newest-first with
+bounded pagination, reopens ordered public messages, and appends one model-backed turn. It holds
+no transaction during the model call, then atomically publishes user and assistant messages with
+an observed-version compare-and-swap. A stale writer conflicts; model or commit failures publish
+neither message. Missing and cross-owner IDs are indistinguishable. Histories are capped at 50
+model-input messages and content at 8,000 characters. Credentials, provider payloads, hidden
+reasoning, exception text, and tool state are never persisted.
+
+Streaming, checkpoints, tools, retries, editing, sharing, title generation, and agent-run state
+remain deferred. `POST /chat/turn` stays stateless and unauthenticated for compatibility.
 
 ## Implemented model boundary
 

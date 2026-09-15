@@ -1,0 +1,158 @@
+import uuid
+from datetime import datetime
+from typing import Annotated
+
+from pydantic import BaseModel, ConfigDict, StringConstraints
+
+from cortex_ai import (
+    ChatMessage,
+    ChatModel,
+    ChatTurnResponse,
+    InvalidModelOutput,
+    ModelResponse,
+    TokenUsage,
+)
+from cortex_state import (
+    AsyncSessionFactory,
+    ConversationRepository,
+    StaleConversationError,
+    async_session_scope,
+)
+
+
+class ConversationNotFound(Exception):
+    pass
+
+
+class ConversationHistoryFull(Exception):
+    pass
+
+
+class ConversationSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    title: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ConversationMessageResponse(BaseModel):
+    id: uuid.UUID
+    sequence: int
+    role: str
+    content: str
+    created_at: datetime
+
+
+class ConversationResponse(ConversationSummary):
+    messages: list[ConversationMessageResponse]
+
+
+class ConversationListResponse(BaseModel):
+    conversations: list[ConversationSummary]
+    limit: int
+    offset: int
+
+
+class AppendTurnRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    content: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=8_000)
+    ]
+
+
+class AppendTurnResponse(BaseModel):
+    conversation: ConversationResponse
+    model: str
+    usage: TokenUsage | None = None
+
+
+class ConversationService:
+    def __init__(self, session_factory: AsyncSessionFactory, model: ChatModel) -> None:
+        self._session_factory = session_factory
+        self._model = model
+
+    async def create(self, owner_id: str) -> ConversationResponse:
+        async with async_session_scope(self._session_factory) as session:
+            conversation = await ConversationRepository(session).create(owner_id)
+            return ConversationResponse.model_validate(
+                {**ConversationSummary.model_validate(conversation).model_dump(), "messages": []}
+            )
+
+    async def list(self, owner_id: str, *, limit: int, offset: int) -> ConversationListResponse:
+        async with async_session_scope(self._session_factory) as session:
+            rows = await ConversationRepository(session).list(owner_id, limit=limit, offset=offset)
+            return ConversationListResponse(
+                conversations=[ConversationSummary.model_validate(row) for row in rows],
+                limit=limit,
+                offset=offset,
+            )
+
+    async def get(self, owner_id: str, conversation_id: uuid.UUID) -> ConversationResponse:
+        async with async_session_scope(self._session_factory) as session:
+            snapshot = await ConversationRepository(session).get(owner_id, conversation_id)
+            if snapshot is None:
+                raise ConversationNotFound
+            return self._response(snapshot.conversation, snapshot.messages)
+
+    async def append_turn(
+        self, owner_id: str, conversation_id: uuid.UUID, content: str
+    ) -> AppendTurnResponse:
+        async with async_session_scope(self._session_factory) as session:
+            snapshot = await ConversationRepository(session).get(owner_id, conversation_id)
+            if snapshot is None:
+                raise ConversationNotFound
+            if len(snapshot.messages) + 1 > 50:
+                raise ConversationHistoryFull
+            observed_version = snapshot.conversation.version
+            history = tuple(
+                ChatMessage(role=message.role, content=message.content)
+                for message in snapshot.messages
+            )
+
+        model_response = await self._model.invoke(
+            (*history, ChatMessage(role="user", content=content))
+        )
+        if (
+            not isinstance(model_response, ModelResponse)
+            or model_response.message.role != "assistant"
+        ):
+            raise InvalidModelOutput
+
+        async with async_session_scope(self._session_factory) as session:
+            await ConversationRepository(session).append_turn(
+                owner_id=owner_id,
+                conversation_id=conversation_id,
+                observed_version=observed_version,
+                user_content=content,
+                assistant_content=model_response.message.content,
+            )
+
+        conversation = await self.get(owner_id, conversation_id)
+        validated = ChatTurnResponse.model_validate(model_response.model_dump())
+        return AppendTurnResponse(
+            conversation=conversation, model=validated.model, usage=validated.usage
+        )
+
+    @staticmethod
+    def _response(conversation: object, messages: tuple[object, ...]) -> ConversationResponse:
+        summary = ConversationSummary.model_validate(conversation)
+        return ConversationResponse(
+            **summary.model_dump(),
+            messages=[
+                ConversationMessageResponse.model_validate(message, from_attributes=True)
+                for message in messages
+            ],
+        )
+
+
+__all__ = [
+    "AppendTurnRequest",
+    "AppendTurnResponse",
+    "ConversationHistoryFull",
+    "ConversationListResponse",
+    "ConversationNotFound",
+    "ConversationResponse",
+    "ConversationService",
+    "StaleConversationError",
+]
